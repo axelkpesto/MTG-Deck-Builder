@@ -31,12 +31,11 @@ class Card(object):
         self.power:str = cd['power'] if 'Creature' in self.card_types and 'power' in cd else None #Power of a Creature Card. None if Card is not a Creature.
         self.toughness:str = cd['toughness'] if 'Creature' in self.card_types and 'toughness' in cd else None #Toughness of a Creature Card. None if Card is not a Creature.
         self.loyalty:str = cd['loyalty'] if 'Planeswalker' in self.card_types and 'loyalty' in cd else None #Starting Loyalty of a Planeswalker Card. None if Card is not a Planeswalker.
-        self.tags:list[str] = list(self.tag(self.text).union(self.tag_subtypes(str(self.card_subtypes)))) #Tagging cards for data analysis
-        self.associations:list[str] = ['']*len(self.tags)
+        self.tags:list[str] = list(self.tag_text(self.text).union(self.tag_subtypes(str(self.card_subtypes)))) #Tagging cards for data analysis
+        self.associations:list[str] = ['']*len(self.tags) #Empty List for Manual Tagging Ease
         if self.color_identity is not None: self.color_identity.sort() #Sorting Color Identity to ensure consistency in comparison.
         
-    #MAKE SEPERATE TAGGING ALGORITHM FOR CREATURE TYPES FOR FASTER SPEEDS
-    def tag(self, text:str) -> set[str]:
+    def tag_text(self, text:str) -> set[str]:
         if text==None or text=="": return set()
         text = text.replace(self.card_name,'').lower()
         tags = {
@@ -109,7 +108,6 @@ class Card(object):
         
         for tag, patterns in subtype_tags.items():
             for pattern in patterns:
-                if tag in card_tags: continue
                 if pattern in text:
                     card_tags.add(tag)
         return card_tags
@@ -161,12 +159,6 @@ class DataSet(object):
         start_time = time.time()
         self.card_set:pd.DataFrame = self.PARSE_SET_DATA()
         print("PARSE DATA: " + str(time.time()- start_time))
-
-        # start_time = time.time()
-        # empty_tags_df = pd.concat([self.card_set[self.card_set['tags'].apply(lambda x: x == [])],self.card_set[self.card_set['tags'].apply(lambda x: x == [''])]])
-        # empty_tags_df.to_csv(sys.stdout)
-        # print("EMPTY TAGS: " + str(time.time()- start_time))
-
 
         start_time = time.time()
         self.WRITE_DATA('Training.txt')
@@ -242,4 +234,5 @@ class DataSet(object):
         if df is None: df = self.card_set
         df.to_csv(filename,index=False)
 
-# ds = DataSet()
+if __name__ == "__main__":
+    ds = DataSet()
