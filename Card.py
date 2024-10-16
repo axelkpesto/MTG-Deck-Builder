@@ -1,91 +1,63 @@
+import numpy as np
 import re
 
 class Card(object):
-
-    def __init__(self, cd) -> None:
-        if type(cd) is list:
-            self.build_from_list(cd)
-        elif type(cd) is dict:
-            self.build_from_dict(cd)
-        else: return
-
-    def build_from_dict(self,cd:dict) -> None:
+    def __init__(self, cd:dict) -> None:
         if cd is None or {}: return
-        self.card_name:str = re.sub(r'[,\n\[\]\(\)\'"]','',str(cd['name'])) if 'name' in cd else None #Name of the Card. None if property doesn't exist.
-        self.card_types:str =  re.sub(r',','',str(cd['types']))  if 'types' in cd else None #Card Types (EX: CREATURE) of the Card. None if property doesn't exist.
-        self.card_supertypes:str = re.sub(r',','',str(cd['supertypes'])) if 'supertypes' in cd else None #Supertypes (EX: LEGENDARY) of the Card. None if property doesn't exist.
-        self.card_subtypes:str = re.sub(r',','',str(cd['subtypes']))  if 'subtypes' in cd else None #Subtypes (EX: GOBLIN) of the Card. None if property doesn't exist.
+        self.card_name:str = str(cd['name']) if 'name' in cd else None #Name of the Card. None if property doesn't exist.
+        self.card_types:list[str] =  [str(x).lower() for x in cd['types']]  if 'types' in cd else None #Card Types (EX: CREATURE) of the Card. None if property doesn't exist.
+        self.card_supertypes:str = cd['supertypes'] if 'supertypes' in cd else None #Supertypes (EX: LEGENDARY) of the Card. None if property doesn't exist.
+        self.card_subtypes:list[str] = [str(x).lower() for x in cd['subtypes']]  if 'subtypes' in cd else None #Subtypes (EX: GOBLIN) of the Card. None if property doesn't exist.
         self.mana_cost:int = cd['manaValue']  if 'manaValue' in cd else None #Numerical Mana Cost of the Card. None if property doesn't exist.
         self.mana_cost_exp:str = cd['manaCost']  if 'manaCost' in cd else None #Expanded Mana Cost of the Card. None if property doesn't exist.
-        self.color_identity:str = re.sub(r',','',str(sorted([x for x in list(set(self.mana_cost_exp)) if x.isalpha()]))) if 'manaCost' in cd else None #Colors contained in the Expanded Mana Cost of the Card. None if property doesn't exist.
+        self.color_identity:list[str] = [x.upper() for x in sorted([x for x in list(set(self.mana_cost_exp)) if x.isalpha()])] if 'manaCost' in cd else None #Colors contained in the Expanded Mana Cost of the Card. None if property doesn't exist.
         self.defense:str = cd['defense'] if 'defense' in cd else None #Defense of a Battle Card. None if the Card is not a Battle.
         self.commander_legal:bool = ('commander' in cd['legalities'])  if 'legalities' in cd else None #Commander Legality of the Card. None if property doesn't exist.
-        self.keywords:str = re.sub(r',','',str(cd['supertypes']))  if 'keywords' in cd else None #Keywords (EX: FIRST STRIKE) of the Card. None if property doesn't exist.
         self.rarity:str = cd['rarity']  if 'rarity' in cd else None #Rarity (EX: UNCOMMON) of the Card. None if property doesn't exist.
-        self.text:str = re.sub(r'[\n]','. ', re.sub(r'[,\[\]\(\)"]','',str(cd['text'])))  if 'text' in cd else None #Text of the Card. None if property doesn't exist.
+        self.text:str = cd['text']  if 'text' in cd else None #Text of the Card. None if property doesn't exist.
         self.rank:int = cd['edhrecRank']  if 'edhrecRank' in cd else None #EDHREC Rank of the Card. None if property doesn't exist.
         self.power:str = cd['power'] if 'Creature' in self.card_types and 'power' in cd else None #Power of a Creature Card. None if Card is not a Creature.
         self.toughness:str = cd['toughness'] if 'Creature' in self.card_types and 'toughness' in cd else None #Toughness of a Creature Card. None if Card is not a Creature.
         self.loyalty:str = cd['loyalty'] if 'Planeswalker' in self.card_types and 'loyalty' in cd else None #Starting Loyalty of a Planeswalker Card. None if Card is not a Planeswalker.
-        self.tags:str = re.sub(r',','',str(list(self.tag_text(self.text).union(self.tag_subtypes(str(self.card_subtypes)))))) #Tagging cards for data analysis
-        self.associations:str = re.sub(r',','',str(['']*len(self.tags.split(' ')))) #Empty List for Manual Tagging Ease
-    
-    def build_from_list(self,cd:list[str]) -> None:
-        if cd is None or []: return
-        self.card_name:str = cd[0]
-        self.card_types:str = cd[1]
-        self.card_supertypes:str = cd[2]
-        self.card_subtypes:str = cd[3]
-        self.mana_cost:int = int(cd[4])
-        self.mana_cost_exp:str = cd[5]
-        self.color_identity:str = cd[6]
-        self.defense:str = cd[7]
-        self.commander_legal:bool = bool(cd[8])
-        self.keywords:str = cd[9]
-        self.rarity:str = cd[10]
-        self.text:str = cd[11]
-        self.rank:int = int(cd[12])
-        self.power:str = cd[13]
-        self.toughness:str = cd[14]
-        self.loyalty:str = cd[15]
+        self.id:str = cd['identifiers']['multiverseId'] if 'identifiers' in cd and 'multiverseId' in cd['identifiers'] else None
+        self.tags:list[str] = [x.lower() for x in list(self.tag_text(self.text).union(self.tag_subtypes(str(self.card_subtypes))))] #Tagging cards for data analysis
 
     def tag_text(self, text:str) -> set[str]:
         if text==None or text=="": return set()
         text = text.replace(self.card_name,'').lower()
-        tags = {
-            'aggro': [r'haste', r'attack each turn', r'deal \d+ damage'],
-            'control': [r'counter target \w spell', r'destroy target', r'exile target', r'return target', r'tap target', r'prevent all damage', r'flash', r'scry',r'can\'t activate',r'can\'t attack',r'can\'t block',r'countered', r'return each', r'destroy that'],
-            'combo': [r'You win the game',r'Opponent loses the game',r'for each',r'without paying it\'s mana cost', r'storm',r'cast for {0}',r'The legend rule doesn\'t apply',r'without paying its mana cost'],
-            'ramp': [r'add mana', r'search your library for a land', r'landfall', r'add {\w}',r'treasure', r'search your library for a basic land', r'search your library for a (|[a-zA-Z]+) land',r'basic lands',r'basic land'],
-            'card_draw': [r'draw (\d+|[a-zA-Z]+) cards', r'draw a card',r'blood token',r'you may play that card this turn'],
-            'party': [r'Cleric',r'Rogue',r'Warrior',r'Wizard'],
-            'token': [r'token', r'populate', r'copy', r'token creature', r'tokens you control'],
-            'life_gain': [r'gain life', r'life equal to', r'whenever you gain life', r'life total', r'lifelink',r'food token',r'gain \d life'],
-            'mill': [r'put into your graveyard', r'mill', r'from the top of their library', r'library into graveyard'],
-            'discard': [r'discard a card', r'discard cards', r'each player discards', r'from their hand'],
-            'reanimator': [r'return target creature card', r'graveyard to the battlefield', r'reanimate', r'bring back', r'from your graveyard'],
-            'burn': [r'deal \d+ damage', r'damage to any target', r'damage to each opponent',r'damage to target creature',r'damage to target planeswalker',r'damage to any target', r'deals \d+ damage', r'deals \w damage'],
-            'enchantment': [r'enchant', r'aura', r'whenever you cast an enchantment', r'constellation'],
-            'equipment': [r'equip', r'attach', r'whenever equipped', r'whenever you attach'],
-            'artifact': [r'artifact', r'whenever you cast an artifact', r'metalcraft'],
-            'planeswalker': [r'planeswalker', r'loyalty', r'loyalty counter'],
-            'tribal': [r'Elf', r'Goblin', r'Zombie', r'Vampire', r'Warrior', r'Merfolk', r'Soldier', r'Dragon', r'Angel', r'Wizard', r'Knight', r'Sliver'],
-            'flicker': [r'exile and return', r'flicker', r'blink', r're-enter the battlefield'],
-            'voltron': [r'equip', r'attach', r'whenever equipped', r'whenever you attach', r'aura'],
-            'infect': [r'infect', r'poison counter', r'proliferate'],
-            'stax': [r'tap target', r'opponent can\'t untap', r'opponents can\'t draw', r'whenever an opponent',r'can\'t cast',r'can\'t activate',r'can\'t attack',r'prevent that damage',r'prevent damage',r'deals damage to you', r'cost {\d+} more to cast'],
-            'storm': [r'storm', r'copy this spell', r'copy that spell', r'copy target spell',r'magecraft'],
-            'graveyard': [r'graveyard', r'return from your graveyard', r'mill',r'from your graveyard',r'unearth'],
-            'sacrifice': [r'sacrifice a creature', r'sacrifice a permanent', r'whenever you sacrifice'],
-            'combat': [r'combat damage to a player', r'combat damage to an opponent', r'vigilance', r'combat damage', r'attacks',r'first strike', r'double strike',r'target attacking', r'target blocking', r'whenever you attack', r'whenever  attacks', r'whenever  blocks', r'each combat', r'blocks', r'attacking', r'blocking', r'can\'t be blocked', r'deals damage to a player'],
-            'buff': [r'\+\d/\++\d',r'\+\w/\++\w',r'\+\w/\++\d',r'\+\d/\++\w',r'\-\d/\++\d',r'\-\w/\++\w',r'\-\w/\++\d',r'\-\d/\++\w',r'\+\d/\-+\d',r'\+\w/\-+\w',r'\+\w/\-+\d',r'\+\d/\-+\w'],
-            'outlaw': [r'Assassin', r'Mercenary', r'Pirate', r'Rogue',r'Warlock'],
-            'removal':[r'Destroy target',r'Destroy all',r'Exile target', r'Exile all',r'Remove from the game', r'Removed from the game'],
-            'discard':[r'discard',r'madness',r'blood'],
-            'etb':[r'enters the battlefield',r'enters under your control', r'enter the battlefield'],
-            'library_control':[r'scry',r'on top of your library',r'card into your hand',r'on the top of your library', r'look at the top'],
-            'extb':[r'whenever a creature dies',r'whenever another creature dies', r'whenever a creature is put into your graveyard', r'whenever this creature dies', r'when  dies', r'regenerate'],
-            'protection':[r'indestructible',r'prevent all damage',r'protection from', r'shroud', r'hexproof', r'you have hexproof', r'you have shroud', r'creatures you control gain indestructible', r'creatures you control gain hexproof', r'creatures you control gain shroud', r'target creature you control gains hexproof']
+        tags_general = {
+            'aggro': ['haste', 'attack each turn',],
+            'control': ['destroy target', 'exile target', 'return target', 'tap target', 'prevent all damage', 'flash', 'scry','can\'t activate','can\'t attack','can\'t block','countered', 'return each', 'destroy that','gain control','tap all'],
+            'combo': ['You win the game','Opponent loses the game','for each','without paying it\'s mana cost', 'storm','cast for {0}','The legend rule doesn\'t apply','without paying its mana cost'],
+            'ramp': ['add mana', 'search your library for a land', 'landfall','treasure', 'search your library for a basic land','basic lands','basic land'],
+            'card_draw': ['draw a card','blood token','you may play that card this turn'],
+            'party': ['Cleric','Rogue','Warrio','Wizard'],
+            'token': ['token', 'populate', 'copy', 'token creature', 'tokens you control'],
+            'life_gain': ['gain life', 'life equal to', 'whenever you gain life', 'life total', 'lifelink','food token','you gain that much life'],
+            'mill': ['put into your graveyard', 'mill', 'from the top of their library', 'library into graveyard'],
+            'discard': ['discard a card', 'discard cards', 'each player discards', 'from their hand'],
+            'reanimato': ['return target creature card', 'graveyard to the battlefield', 'reanimate', 'bring back', 'from your graveyard'],
+            'burn': ['damage to any target', 'damage to each opponent','damage to target creature','damage to target planeswalke','damage to any target'],
+            'enchantment': ['enchant', 'aura', 'whenever you cast an enchantment', 'constellation','saga'],
+            'equipment': ['equip', 'attach', 'whenever equipped', 'whenever you attach'],
+            'artifact': ['artifact', 'whenever you cast an artifact', 'metalcraft'],
+            'planeswalke': ['planeswalke', 'loyalty', 'loyalty counte'],
+            'tribal': ['Elf', 'Goblin', 'Zombie', 'Vampire', 'Warrio', 'Merfolk', 'Soldie', 'Dragon', 'Angel', 'Wizard', 'Knight', 'Slive'],
+            'flicke': ['exile and return', 'flicke', 'blink', 're-enter the battlefield'],
+            'voltron': ['equip', 'attach', 'whenever equipped', 'whenever you attach', 'aura'],
+            'infect': ['infect', 'poison counte', 'proliferate'],
+            'stax': ['tap target', 'opponent can\'t untap', 'opponents can\'t draw', 'whenever an opponent','can\'t cast','can\'t activate','can\'t attack','prevent that damage','prevent damage','deals damage to you'],
+            'storm': ['storm', 'copy this spell', 'copy that spell', 'copy target spell','magecraft'],
+            'graveyard': ['graveyard', 'return from your graveyard', 'mill','from your graveyard','unearth'],
+            'sacrifice': ['sacrifice a creature', 'sacrifice a permanent', 'whenever you sacrifice'],
+            'combat': ['combat damage to a playe', 'combat damage to an opponent', 'vigilance', 'combat damage', 'attacks','first strike', 'double strike','target attacking', 'target blocking', 'whenever you attack', 'whenever  attacks', 'whenever  blocks', 'each combat', 'blocks', 'attacking', 'blocking', 'can\'t be blocked', 'deals damage to a playe', 'Flying'],
+            'outlaw': ['Assassin', 'Mercenary', 'Pirate', 'Rogue','Warlock'],
+            'removal':['Destroy target','Destroy all','Exile target', 'Exile all','Remove from the game', 'Removed from the game'],
+            'discard':['discard','madness','blood'],
+            'etb':['enters the battlefield','enters under your control', 'enter the battlefield'],
+            'library_control':['scry','on top of your library','card into your hand','on the top of your library', 'look at the top'],
+            'extb':['whenever a creature dies','whenever another creature dies', 'whenever a creature is put into your graveyard', 'whenever this creature dies', 'when  dies', 'regenerate'],
+            'protection':['indestructible','prevent all damage','protection from', 'shroud', 'hexproof', 'you have hexproof', 'you have shroud', 'creatures you control gain indestructible', 'creatures you control gain hexproof', 'creatures you control gain shroud', 'target creature you control gains hexproof']
         }
 
         tags_joint = {
@@ -94,47 +66,74 @@ class Card(object):
             'protection':[['prevent','damage'],]
         }
 
+        tags_regex = {
+            'aggro': [r'attack each turn', r'deal \d+ damage'],
+            'combo': [r'cast for {0}'],
+            'control': [r'counter target \w spell',],
+            'ramp': [r'add {\w}', r'search your library for a (|[a-zA-Z]+) land',],
+            'card_draw': [r'draw (\d+|[a-zA-Z]+) cards',],
+            'life_gain': [r'gain \d life',],
+            'burn': [r'deal \d+ damage', r'deals \d+ damage', r'deals \w damage'],
+            'stax': [r'cost {\d+} more to cast'],
+            'buff': [r'\+\d/\++\d',r'\+\w/\++\w',r'\+\w/\++\d',r'\+\d/\++\w',r'\-\d/\++\d',r'\-\w/\++\w',r'\-\w/\++\d',r'\-\d/\++\w',r'\+\d/\-+\d',r'\+\w/\-+\w',r'\+\w/\-+\d',r'\+\d/\-+\w'],
+        }
+
         card_tags:set[str] = set()
-        for tag, patterns in tags.items():
+
+        for tag, patterns in tags_general.items():
+            if tag in card_tags: continue
             for pattern in patterns:
-                if re.search(pattern, str(text), re.IGNORECASE):
-                    card_tags.add(str(tag))
-        
+                if pattern in text:
+                    card_tags.add(str(tag).lower())
+                    break
+
         for tag, patterns in tags_joint.items():
-            for pattern in patterns:
-                add = True
-                for i in range(len(pattern)):
-                    if pattern[i].lower() not in str(text):
-                        add = False
-                if add: card_tags.add(str(tag))
+          if tag in card_tags: continue
+          for pattern in patterns:
+              add = True
+              for i in range(len(pattern)):
+                  if pattern[i].lower() not in str(text):
+                      add = False
+              if add: 
+                card_tags.add(str(tag).lower())
+                break
+
+        for tag, patterns in tags_regex.items():
+          if tag in card_tags: continue
+          for pattern in patterns:
+              if re.search(pattern, str(text), re.IGNORECASE):
+                  card_tags.add(str(tag).lower())
+                  break
+        
         return card_tags
 
     def tag_subtypes(self, text:list[str]) -> set[str]:
         if text==None or text==[]: return set()
-        card_tags = set()
+        card_tags:set[str] = set()
         subtype_tags = {
             'tribal': ['Elf', 'Goblin', 'Zombie', 'Vampire', 'Warrior', 'Merfolk', 'Soldier', 'Dragon', 'Angel', 'Wizard', 'Knight', 'Sliver'],
             'outlaw': ['Assassin', 'Mercenary', 'Pirate', 'Rogue','Warlock'],
             'party': ['Cleric','Rogue','Warrior','Wizard']
         }
-        
+
         for tag, patterns in subtype_tags.items():
             for pattern in patterns:
                 if pattern in text:
-                    card_tags.add(tag)
+                    card_tags.add(str(tag).lower())
+                    break
         return card_tags
 
     def __eq__(self, value: object) -> bool:
         if isinstance(value, Card):
             return self.card_name == value.card_name
         return False
-    
+
     def __str__(self) -> str:
         return ("NAME: " + self.card_name + "\nCARD TYPES: " + str(self.card_types) + "\nCOLORS: " + str(self.color_identity))
 
     def __hash__(self):
         return hash(self.card_name)
-    
+
     def get_attributes(self) -> dict:
         """
         get_attributes maps the name of attributes to the value of the attribute.
@@ -151,13 +150,90 @@ class Card(object):
             'color_identity':self.color_identity,
             'defense':self.defense,
             'commander_legal':self.commander_legal,
-            'keywords':self.keywords,
             'rarity':self.rarity,
             'text':self.text,
             'rank':self.rank,
             'power':self.power,
             'toughness':self.toughness,
             'loyalty':self.loyalty,
+            'id':self.id,
             'tags':self.tags,
-            'associations':self.associations
         }
+
+class CardEncoder(object):
+    def __init__(self):
+        self.card_types:list[str] = sorted(['Enchantment', 'Land', 'Artifact', 'Creature', 'Instant', 'Sorcery', 'Planeswalker', 'Battle'])
+        self.card_supertypes:list[str] = sorted(['Legendary', 'Basic'])
+
+        creature_subtypes:list[str] = sorted(['Advisor', 'Aetherborn', 'Ally', 'Angel', 'Anteater', 'Antelope', 'Ape', 'Archer', 'Archon', 'Artificer', 'Assassin', 'Assembly-Worker', 'Atog', 'Aurochs', 'Avatar', 'Badger', 'Barbarian', 'Basilisk', 'Bat', 'Bear', 'Beast', 'Beeble', 'Berserker', 'Bird', 'Blinkmoth', 'Boar', 'Bringer', 'Brushwagg', 'Camarid', 'Camel', 'Caribou', 'Carrier', 'Cat', 'Centaur', 'Cephalid', 'Chimera', 'Citizen', 'Cleric', 'Cockatrice', 'Construct', 'Coward', 'Crab', 'Crocodile', 'Cyclops', 'Dauthi', 'Demon', 'Deserter', 'Devil', 'Dinosaur', 'Djinn', 'Dragon', 'Drake', 'Dreadnought', 'Drone', 'Druid', 'Dryad', 'Dwarf', 'Efreet', 'Elder', 'Eldrazi', 'Elemental', 'Elephant', 'Elf', 'Elk', 'Eye', 'Faerie', 'Ferret', 'Fish', 'Flagbearer', 'Fox', 'Frog', 'Fungus', 'Gargoyle', 'Germ', 'Giant', 'Gnome', 'Goat', 'Goblin', 'God', 'Golem', 'Gorgon', 'Graveborn', 'Gremlin', 'Griffin', 'Hag', 'Harpy', 'Hellion', 'Hippo', 'Hippogriff', 'Hormarid', 'Homunculus', 'Horror', 'Horse', 'Hound', 'Human', 'Hydra', 'Hyena', 'Illusion', 'Imp', 'Incarnation', 'Insect', 'Jellyfish', 'Juggernaut', 'Kavu', 'Kirin', 'Kithkin', 'Knight', 'Kobold', 'Kor', 'Kraken', 'Lamia', 'Lammasu', 'Leech', 'Leviathan', 'Lhurgoyf', 'Licid', 'Lizard', 'Manticore', 'Masticore', 'Mercenary', 'Merfolk', 'Metathran', 'Minion', 'Minotaur', 'Mole', 'Monger', 'Mongoose', 'Monk', 'Moonfolk', 'Mutant', 'Myr', 'Mystic', 'Naga', 'Nautilus', 'Nephilim', 'Nightmare', 'Nightstalker', 'Ninja', 'Noggle', 'Nomad', 'Nymph', 'Octopus', 'Ogre', 'Ooze', 'Orb', 'Orc', 'Orgg', 'Ouphe', 'Ox', 'Oyster', 'Pegasus', 'Pentavite', 'Pest', 'Phelddagrif', 'Phoenix', 'Pincher', 'Pirate', 'Plant', 'Praetor', 'Prism', 'Processor', 'Rabbit', 'Rat', 'Rebel', 'Reflection', 'Rhino', 'Rigger', 'Rogue', 'Sable', 'Salamander', 'Samurai', 'Sand', 'Saproling', 'Satyr', 'Scarecrow', 'Scion', 'Scorpion', 'Scout', 'Serf', 'Serpent', 'Shade', 'Shaman', 'Shapeshifter', 'Sheep', 'Siren', 'Skeleton', 'Slith', 'Sliver', 'Slug', 'Snake', 'Soldier', 'Soltari', 'Spawn', 'Specter', 'Spellshaper', 'Sphinx', 'Spider', 'Spike', 'Spirit', 'Splinter', 'Sponge', 'Squid', 'Squirrel', 'Starfish', 'Surrakar', 'Survivor', 'Tetravite', 'Thalakos', 'Thopter', 'Thrull', 'Treefolk', 'Triskelavite', 'Troll', 'Turtle', 'Unicorn', 'Vampire', 'Vedalken', 'Viashino', 'Volver', 'Wall', 'Warrior', 'Weird', 'Werewolf', 'Whale', 'Wizard', 'Wolf', 'Wolverine', 'Wombat', 'Worm', 'Wraith', 'Wurm', 'Yeti', 'Zombie', 'Zubera'])
+        artifact_subtypes:list[str] = sorted(['Blood', 'Clue', 'Food', 'Gold', 'Incubator', 'Junk', 'Map', 'Powerstone', 'Treasure', 'Equipment', 'Fortification', 'Vehicle', 'Attraction', 'Contraption'])
+        battle_subtypes:list[str] = sorted(['Seige'])
+        enchantment_subtypes:list[str] = sorted(['Aura', 'Background', 'Saga', 'Role', 'Shard', 'Cartouche', 'Case', 'Class', 'Curse', 'Rune', 'Shrine'])
+        land_subtypes:list[str] = sorted(['Plains', 'Forest', 'Mountain', 'Island', 'Swamp', 'Cave', 'Desert', 'Gate', 'Lair', 'Locus', 'Mine', 'Power-Plant', 'Sphere', 'Tower', 'Urza'])
+        spell_subtypes:list[str] = sorted(['Adventure', 'Arcane', 'Chorus', 'Lesson', 'Trap'])
+
+        self.large_subtypes:list[str] = creature_subtypes + artifact_subtypes + battle_subtypes + enchantment_subtypes + land_subtypes + spell_subtypes
+        self.color_identities:list[str] = sorted(['W', 'G', 'U', 'B', 'R', 'C'])
+        self.tags:list[str] = sorted(['Aggro','Control','Combo','Ramp','Card_Draw','Party','Token','Life_Gain','Mill','Discard','Reanimator','Burn','Enchantment','Equipment','Artifact','Planeswalker','Tribal','Flicker','Voltron','Infect','Stax','Storm','Graveyard','Sacrifice','Combat','Buff','Outlaw','Removal','Discard','Etb','Library_Control','Extb','Protection'])
+
+    def encode(self, crd:Card) -> tuple[str,np.array]:
+        ret = []
+
+        cd = [0]*len(self.card_types)
+        for i in range(len(self.card_types)):
+            if self.card_types[i].lower() in crd.card_types:
+                cd[i] = 1
+        ret += cd
+        cd = [0]*len(self.card_supertypes)
+        for i in range(len(self.card_supertypes)):
+            if self.card_supertypes[i].lower() in crd.card_supertypes:
+                cd[i] = 1
+        ret += cd
+
+        cd = [0]*len(self.large_subtypes)
+        for i in range(len(self.large_subtypes)):
+            if self.large_subtypes[i].lower() in crd.card_subtypes:
+                cd[i] = 1
+        ret += cd
+
+        ret += [int(crd.mana_cost)]
+        
+        cd = [0]*len(self.color_identities)
+        if crd.color_identity == [] or crd.color_identity==None:
+            if crd.mana_cost>0 or crd.mana_cost==None:
+                cd[-1] = 1
+        else:
+            for i in range(len(self.color_identities)):
+                if self.color_identities[i].upper() in crd.color_identity:
+                    cd[i] = 1
+        ret += cd
+
+        ret += [self.rarity_to_int(crd.card_name, crd.rarity.lower())]
+
+        cd = [0]*len(self.tags)
+        for i in range(len(self.tags)):
+            if self.tags[i].lower() in crd.tags:
+                cd[i] = 1
+        ret += cd
+
+        return (crd.card_name, np.array(ret))
+
+    def rarity_to_int(self, name:str, rarity:str) -> int:
+        match rarity.lower():
+            case 'common':
+                return 1
+            case 'special':
+                return 1
+            case 'uncommon':
+                return 2
+            case 'rare':
+                return 3
+            case 'mythic':
+                return 4
+            case 'timeshifted':
+                return 5
+            case 'masterpiece':
+                return 6
+            case _:
+                print("NAME: " + name + "RARITY?: " + str(rarity))
+                raise Exception('Rarity not found')
