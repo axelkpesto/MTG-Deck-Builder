@@ -6,6 +6,7 @@ import time, os
 
 class VectorStore(object):
     def __init__(self):
+
         self.encoder = CardEncoder()
         self.vector_data: dict = {}
         self.vector_indexes: dict = {}
@@ -17,36 +18,55 @@ class VectorStore(object):
             return value in self.vector_data
         return False
 
+    #Add a card to db
     def add_card(self, crd: Card) -> None:
-        if self.contains(crd):
+        if self.contains(crd): #Skip if Card.name is in db
             return
-        crd_tuple = self.encoder.encode(crd)
-        self.add_vector(crd_tuple[0], crd_tuple[1])
+        crd_tuple = self.encoder.encode(crd) #Get vector representation of Card (Tuple of name and vector)
+        self.add_vector(crd_tuple[0], crd_tuple[1]) #Add Vector ->
 
+    #Add a vector to db
     def add_vector(self, v_id: str, vector: np.array) -> None:
-        if self.contains(v_id):
+        if self.contains(v_id): #Skip if id in db
             return
-        self.vector_data[v_id] = vector
-        self._update_index(v_id, vector)
+        self.vector_data[v_id] = vector #Set Vector Data
+        self._update_index(v_id, vector, runtime=True) #Update Similarities
 
     def get_vector(self, v_id: str) -> np.array:
         return self.vector_data.get(v_id, None)
 
-    def _update_index(self, v_id: str, vector: np.array, runtime:bool = False) -> None:
-            start = time.time()
 
-            query_vector_gpu = cp.asarray(vector)
-            all_vectors = cp.array(list(self.vector_data.values()))
-            dot_products = cp.dot(all_vectors, query_vector_gpu)
+    #Updates the similarity relations between query vector and all other vectors in db
+    def _update_index(self, v_id: str, vector: np.array, runtime: bool = False, batch_size: int = 1000) -> None:
+        start = time.time() #Variable for tracking time it takes to query similarities
+        
+        query_vector = cp.asarray(vector) #Query vector to CuPy array
+        query_norm = cp.linalg.norm(query_vector) #normalized query vector to cupy
+        
+        #Seperate queries into batches for batch processing. Not sure if this actively does any major changes.
+        for i in range(0, len(self.vector_data), batch_size):
+            
+            #array of our batch of vectors from our db
+            all_vectors = cp.array(list(self.vector_data.values())[i:i + batch_size])
+            
+            #CuPy array of all dot product relations
+            dot_products = cp.dot(all_vectors, query_vector)
 
-            similarities_cpu = cp.asnumpy(dot_products / (cp.linalg.norm(all_vectors, axis=1) * cp.linalg.norm(query_vector_gpu)))
+            #CuPy array of all Cosine Similarities between query vector and db items
+            similarities = cp.asnumpy(dot_products / (cp.linalg.norm(all_vectors, axis=1) * query_norm))
+            
+            #Update DB to save similarities
+            for idx, (vector_id, _) in enumerate(self.vector_data.items()):                
+                if i + idx < len(self.vector_data) and idx < len(similarities):
+                    if vector_id not in self.vector_indexes:
+                        self.vector_indexes[vector_id] = {}
+                    self.vector_indexes[vector_id][v_id] = similarities[idx]
 
-            for idx, (vector_id, _) in enumerate(self.vector_data.items()):
-                if vector_id not in self.vector_indexes:
-                    self.vector_indexes[vector_id] = {}
-                self.vector_indexes[vector_id][v_id] = similarities_cpu[idx]
+        #Print stuff if parameter met
+        if runtime:
+            print("RUNTIME OF UPDATING INDEX: " + str(time.time() - start) + ", INDEX: " + str(len(self.vector_data.items())))
 
-            if runtime: print("RUNTIME OF UPDATING INDEX: " + str(time.time() - start) + ", INDEX: " + str(len(self.vector_data.items())))
+
 
     def get_similar_vectors(self, q_vector: np.array, n_results: int = 5) -> list[tuple]:
         q_vector_gpu = cp.asarray(q_vector)
@@ -65,7 +85,7 @@ class VectorStore(object):
 class VectorDatabase(object):
     def __init__(self):
         self.vector_store = VectorStore()
-        self.parse_json("AllPrintings.json")
+        self.parse_json(filename="AllPrintings.json",runtime=True)
 
     def parse_json(self, filename:str, runtime:bool = False) -> VectorStore:
         assert os.path.isfile(filename), f"{filename} not found."
@@ -100,3 +120,4 @@ class VectorDatabase(object):
 if __name__ == "__main__":
     vd = VectorDatabase()
     vd.get_vector("Murder")
+    
