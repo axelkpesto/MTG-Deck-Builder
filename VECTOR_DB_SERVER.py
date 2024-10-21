@@ -1,6 +1,6 @@
 from flask import Flask, request, jsonify
 from VECTOR_DATABASE import VectorDatabase
-from Card import Card
+from CARD_DATA import Card
 import numpy as np
 
 
