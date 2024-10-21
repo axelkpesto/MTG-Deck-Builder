@@ -68,7 +68,8 @@ class DataSet(object):
             for _, row in df.iterrows():
                 file.write(','.join([f'"{self.format_output(value)}"' for value in row.values]) + '\n')
 
-    def GET_CARD_SET(self): return self.card_set
+    def GET_CARD_SET(self): 
+        return self.card_set
 
     def format_output(self, txt:str):
         return re.sub(r'[\n]', '. ', re.sub(r',\[\]\(\)"\'', '', str(txt)))
