@@ -4,25 +4,24 @@ import re
 class Card(object):
     def __init__(self, cd:dict) -> None:
         if cd is None or {}: return
-        self.card_name:str = str(cd['name']) if 'name' in cd else None #Name of the Card. None if property doesn't exist.
-        self.card_types:list[str] =  [str(x).lower() for x in cd['types']]  if 'types' in cd else None #Card Types (EX: CREATURE) of the Card. None if property doesn't exist.
-        self.card_supertypes:str = cd['supertypes'] if 'supertypes' in cd else None #Supertypes (EX: LEGENDARY) of the Card. None if property doesn't exist.
-        self.card_subtypes:list[str] = [str(x).lower() for x in cd['subtypes']]  if 'subtypes' in cd else None #Subtypes (EX: GOBLIN) of the Card. None if property doesn't exist.
-        self.mana_cost:int = cd['manaValue']  if 'manaValue' in cd else None #Numerical Mana Cost of the Card. None if property doesn't exist.
-        self.mana_cost_exp:str = cd['manaCost']  if 'manaCost' in cd else None #Expanded Mana Cost of the Card. None if property doesn't exist.
-        self.color_identity:list[str] = [x.upper() for x in sorted([x for x in list(set(self.mana_cost_exp)) if x.isalpha()])] if 'manaCost' in cd else None #Colors contained in the Expanded Mana Cost of the Card. None if property doesn't exist.
-        self.defense:str = cd['defense'] if 'defense' in cd else None #Defense of a Battle Card. None if the Card is not a Battle.
-        self.commander_legal:bool = ('commander' in cd['legalities'])  if 'legalities' in cd else None #Commander Legality of the Card. None if property doesn't exist.
-        self.rarity:str = cd['rarity']  if 'rarity' in cd else None #Rarity (EX: UNCOMMON) of the Card. None if property doesn't exist.
-        self.text:str = cd['text']  if 'text' in cd else None #Text of the Card. None if property doesn't exist.
-        self.rank:int = cd['edhrecRank']  if 'edhrecRank' in cd else None #EDHREC Rank of the Card. None if property doesn't exist.
-        self.power:str = cd['power'] if 'Creature' in self.card_types and 'power' in cd else None #Power of a Creature Card. None if Card is not a Creature.
-        self.toughness:str = cd['toughness'] if 'Creature' in self.card_types and 'toughness' in cd else None #Toughness of a Creature Card. None if Card is not a Creature.
-        self.loyalty:str = cd['loyalty'] if 'Planeswalker' in self.card_types and 'loyalty' in cd else None #Starting Loyalty of a Planeswalker Card. None if Card is not a Planeswalker.
-        self.id:str = cd['identifiers']['multiverseId'] if 'identifiers' in cd and 'multiverseId' in cd['identifiers'] else None
-        self.tags:list[str] = [x.lower() for x in list(self.tag_text(self.text).union(self.tag_subtypes(str(self.card_subtypes))))] #Tagging cards for data analysis
+        self.card_name: str = str(cd['name']) if 'name' in cd else None #Name of the Card. None if property doesn't exist.
+        self.card_types: list[str] =  [str(x).lower() for x in cd['types']]  if 'types' in cd else None #Card Types (EX: CREATURE) of the Card. None if property doesn't exist.
+        self.card_supertypes: str = cd['supertypes'] if 'supertypes' in cd else None #Supertypes (EX: LEGENDARY) of the Card. None if property doesn't exist.
+        self.card_subtypes: list[str] = [str(x).lower() for x in cd['subtypes']]  if 'subtypes' in cd else None #Subtypes (EX: GOBLIN) of the Card. None if property doesn't exist.
+        self.mana_cost: int = cd['manaValue']  if 'manaValue' in cd else None #Numerical Mana Cost of the Card. None if property doesn't exist.
+        self.mana_cost_exp: str = cd['manaCost']  if 'manaCost' in cd else None #Expanded Mana Cost of the Card. None if property doesn't exist.
+        self.color_identity: list[str] = [x.upper() for x in sorted([x for x in list(set(self.mana_cost_exp)) if x.isalpha()])] if 'manaCost' in cd else None #Colors contained in the Expanded Mana Cost of the Card. None if property doesn't exist.
+        self.defense: str = cd['defense'] if 'defense' in cd else None #Defense of a Battle Card. None if the Card is not a Battle.
+        self.rarity: str = cd['rarity']  if 'rarity' in cd else None #Rarity (EX: UNCOMMON) of the Card. None if property doesn't exist.
+        self.text: str = cd['text']  if 'text' in cd else None #Text of the Card. None if property doesn't exist.
+        self.rank: int = cd['edhrecRank']  if 'edhrecRank' in cd else None #EDHREC Rank of the Card. None if property doesn't exist.
+        self.power: str = cd['power'] if 'Creature' in self.card_types and 'power' in cd else None #Power of a Creature Card. None if Card is not a Creature.
+        self.toughness: str = cd['toughness'] if 'Creature' in self.card_types and 'toughness' in cd else None #Toughness of a Creature Card. None if Card is not a Creature.
+        self.loyalty: str = cd['loyalty'] if 'Planeswalker' in self.card_types and 'loyalty' in cd else None #Starting Loyalty of a Planeswalker Card. None if Card is not a Planeswalker.
+        self.id: str = cd['identifiers']['multiverseId'] if 'identifiers' in cd and 'multiverseId' in cd['identifiers'] else None
+        self.tags: list[str] = [x.lower() for x in list(self.tag_text(self.text).union(self.tag_subtypes(str(self.card_subtypes))))] #Tagging cards for data analysis
 
-    def tag_text(self, text:str) -> set[str]:
+    def tag_text(self, text: str) -> set[str]:
         if text==None or text=="": return set()
         text = text.replace(self.card_name,'').lower()
         tags_general = {
@@ -78,7 +77,7 @@ class Card(object):
             'buff': [r'\+\d/\++\d',r'\+\w/\++\w',r'\+\w/\++\d',r'\+\d/\++\w',r'\-\d/\++\d',r'\-\w/\++\w',r'\-\w/\++\d',r'\-\d/\++\w',r'\+\d/\-+\d',r'\+\w/\-+\w',r'\+\w/\-+\d',r'\+\d/\-+\w'],
         }
 
-        card_tags:set[str] = set()
+        card_tags: set[str] = set()
 
         for tag, patterns in tags_general.items():
             if tag in card_tags: continue
@@ -107,7 +106,7 @@ class Card(object):
         
         return card_tags
 
-    def tag_subtypes(self, text:list[str]) -> set[str]:
+    def tag_subtypes(self, text: list[str]) -> set[str]:
         if text==None or text==[]: return set()
         card_tags:set[str] = set()
         subtype_tags = {
@@ -131,7 +130,7 @@ class Card(object):
     def __str__(self) -> str:
         return ("NAME: " + self.card_name + "\nCARD TYPES: " + str(self.card_types) + "\nCOLORS: " + str(self.color_identity))
 
-    def __hash__(self):
+    def __hash__(self) -> int:
         return hash(self.card_name)
 
     def get_attributes(self) -> dict:
@@ -149,7 +148,6 @@ class Card(object):
             'mana_cost_exp':self.mana_cost_exp,
             'color_identity':self.color_identity,
             'defense':self.defense,
-            'commander_legal':self.commander_legal,
             'rarity':self.rarity,
             'text':self.text,
             'rank':self.rank,
@@ -159,7 +157,7 @@ class Card(object):
             'id':self.id,
             'tags':self.tags,
         }
-
+    
 class CardEncoder(object):
     def __init__(self):
         self.card_types:list[str] = sorted(['Enchantment', 'Land', 'Artifact', 'Creature', 'Instant', 'Sorcery', 'Planeswalker', 'Battle'])
@@ -175,7 +173,7 @@ class CardEncoder(object):
         self.large_subtypes:list[str] = creature_subtypes + artifact_subtypes + battle_subtypes + enchantment_subtypes + land_subtypes + spell_subtypes
         self.color_identities:list[str] = sorted(['W', 'G', 'U', 'B', 'R', 'C'])
         self.tags:list[str] = sorted(['Aggro','Control','Combo','Ramp','Card_Draw','Party','Token','Life_Gain','Mill','Discard','Reanimator','Burn','Enchantment','Equipment','Artifact','Planeswalker','Tribal','Flicker','Voltron','Infect','Stax','Storm','Graveyard','Sacrifice','Combat','Buff','Outlaw','Removal','Discard','Etb','Library_Control','Extb','Protection'])
-
+    
     def encode(self, crd:Card) -> tuple[str,np.array]:
         ret = []
 
@@ -222,8 +220,6 @@ class CardEncoder(object):
         match rarity.lower():
             case 'common':
                 return 1
-            case 'special':
-                return 1
             case 'uncommon':
                 return 2
             case 'rare':
@@ -234,6 +230,91 @@ class CardEncoder(object):
                 return 5
             case 'masterpiece':
                 return 6
+            case 'special':
+                return 7
             case _:
                 print("NAME: " + name + "RARITY?: " + str(rarity))
                 raise Exception('Rarity not found')
+        
+class CardDecoder:
+    def __init__(self):
+        self.card_types = sorted(['Enchantment', 'Land', 'Artifact', 'Creature', 'Instant', 'Sorcery', 'Planeswalker', 'Battle'])
+        self.card_supertypes = sorted(['Legendary', 'Basic'])
+
+        creature_subtypes = sorted(['Advisor', 'Aetherborn', 'Ally', 'Angel', 'Anteater', 'Antelope', 'Ape', 'Archer', 'Archon', 'Artificer', 'Assassin', 'Assembly-Worker', 'Atog', 'Aurochs', 'Avatar', 'Badger', 'Barbarian', 'Basilisk', 'Bat', 'Bear', 'Beast', 'Beeble', 'Berserker', 'Bird', 'Blinkmoth', 'Boar', 'Bringer', 'Brushwagg', 'Camarid', 'Camel', 'Caribou', 'Carrier', 'Cat', 'Centaur', 'Cephalid', 'Chimera', 'Citizen', 'Cleric', 'Cockatrice', 'Construct', 'Coward', 'Crab', 'Crocodile', 'Cyclops', 'Dauthi', 'Demon', 'Deserter', 'Devil', 'Dinosaur', 'Djinn', 'Dragon', 'Drake', 'Dreadnought', 'Drone', 'Druid', 'Dryad', 'Dwarf', 'Efreet', 'Elder', 'Eldrazi', 'Elemental', 'Elephant', 'Elf', 'Elk', 'Eye', 'Faerie', 'Ferret', 'Fish', 'Flagbearer', 'Fox', 'Frog', 'Fungus', 'Gargoyle', 'Germ', 'Giant', 'Gnome', 'Goat', 'Goblin', 'God', 'Golem', 'Gorgon', 'Graveborn', 'Gremlin', 'Griffin', 'Hag', 'Harpy', 'Hellion', 'Hippo', 'Hippogriff', 'Hormarid', 'Homunculus', 'Horror', 'Horse', 'Hound', 'Human', 'Hydra', 'Hyena', 'Illusion', 'Imp', 'Incarnation', 'Insect', 'Jellyfish', 'Juggernaut', 'Kavu', 'Kirin', 'Kithkin', 'Knight', 'Kobold', 'Kor', 'Kraken', 'Lamia', 'Lammasu', 'Leech', 'Leviathan', 'Lhurgoyf', 'Licid', 'Lizard', 'Manticore', 'Masticore', 'Mercenary', 'Merfolk', 'Metathran', 'Minion', 'Minotaur', 'Mole', 'Monger', 'Mongoose', 'Monk', 'Moonfolk', 'Mutant', 'Myr', 'Mystic', 'Naga', 'Nautilus', 'Nephilim', 'Nightmare', 'Nightstalker', 'Ninja', 'Noggle', 'Nomad', 'Nymph', 'Octopus', 'Ogre', 'Ooze', 'Orb', 'Orc', 'Orgg', 'Ouphe', 'Ox', 'Oyster', 'Pegasus', 'Pentavite', 'Pest', 'Phelddagrif', 'Phoenix', 'Pincher', 'Pirate', 'Plant', 'Praetor', 'Prism', 'Processor', 'Rabbit', 'Rat', 'Rebel', 'Reflection', 'Rhino', 'Rigger', 'Rogue', 'Sable', 'Salamander', 'Samurai', 'Sand', 'Saproling', 'Satyr', 'Scarecrow', 'Scion', 'Scorpion', 'Scout', 'Serf', 'Serpent', 'Shade', 'Shaman', 'Shapeshifter', 'Sheep', 'Siren', 'Skeleton', 'Slith', 'Sliver', 'Slug', 'Snake', 'Soldier', 'Soltari', 'Spawn', 'Specter', 'Spellshaper', 'Sphinx', 'Spider', 'Spike', 'Spirit', 'Splinter', 'Sponge', 'Squid', 'Squirrel', 'Starfish', 'Surrakar', 'Survivor', 'Tetravite', 'Thalakos', 'Thopter', 'Thrull', 'Treefolk', 'Triskelavite', 'Troll', 'Turtle', 'Unicorn', 'Vampire', 'Vedalken', 'Viashino', 'Volver', 'Wall', 'Warrior', 'Weird', 'Werewolf', 'Whale', 'Wizard', 'Wolf', 'Wolverine', 'Wombat', 'Worm', 'Wraith', 'Wurm', 'Yeti', 'Zombie', 'Zubera'])
+        artifact_subtypes = sorted(['Blood', 'Clue', 'Food', 'Gold', 'Incubator', 'Junk', 'Map', 'Powerstone', 'Treasure', 'Equipment', 'Fortification', 'Vehicle', 'Attraction', 'Contraption'])
+        battle_subtypes = sorted(['Seige'])
+        enchantment_subtypes = sorted(['Aura', 'Background', 'Saga', 'Role', 'Shard', 'Cartouche', 'Case', 'Class', 'Curse', 'Rune', 'Shrine'])
+        land_subtypes = sorted(['Plains', 'Forest', 'Mountain', 'Island', 'Swamp', 'Cave', 'Desert', 'Gate', 'Lair', 'Locus', 'Mine', 'Power-Plant', 'Sphere', 'Tower', 'Urza'])
+        spell_subtypes = sorted(['Adventure', 'Arcane', 'Chorus', 'Lesson', 'Trap'])
+
+        self.large_subtypes = creature_subtypes + artifact_subtypes + battle_subtypes + enchantment_subtypes + land_subtypes + spell_subtypes
+        self.color_identities = sorted(['W', 'G', 'U', 'B', 'R', 'C'])
+        self.tags = sorted(['Aggro','Control','Combo','Ramp','Card_Draw','Party','Token','Life_Gain','Mill','Discard','Reanimator','Burn','Enchantment','Equipment','Artifact','Planeswalker','Tribal','Flicker','Voltron','Infect','Stax','Storm','Graveyard','Sacrifice','Combat','Buff','Outlaw','Removal','Discard','Etb','Library_Control','Extb','Protection'])
+
+    def decode_to_string(self,  card_name: str, encoded_vector: np.array) -> str:
+        idx = 0
+
+        card_types = [self.card_types[i] for i, v in enumerate(encoded_vector[idx:idx+len(self.card_types)]) if v == 1]
+        idx += len(self.card_types)
+
+        supertypes = [self.card_supertypes[i] for i, v in enumerate(encoded_vector[idx:idx+len(self.card_supertypes)]) if v == 1]
+        idx += len(self.card_supertypes)
+
+        subtypes = [self.large_subtypes[i] for i, v in enumerate(encoded_vector[idx:idx+len(self.large_subtypes)]) if v == 1]
+        idx += len(self.large_subtypes)
+
+        mana_cost = int(encoded_vector[idx])
+        idx += 1
+
+        color_identity = [self.color_identities[i] for i, v in enumerate(encoded_vector[idx:idx+len(self.color_identities)]) if v == 1]
+        idx += len(self.color_identities)
+
+        rarity = self.int_to_rarity(encoded_vector[idx])
+        idx += 1
+
+        tags = [self.tags[i] for i, v in enumerate(encoded_vector[idx:idx+len(self.tags)]) if v == 1]
+
+
+        return ("Name: " + str(card_name) + "\n Card Types: " + str(card_types) + "\n Card Supertypes: " + str(supertypes) + "\n Card Subtypes: " + str(subtypes) + \
+                "\n Mana Cost: " + str(mana_cost) + "\n Color Identity: " + str(color_identity) + "\n Rarity: " + str(rarity) + "\n Tags: \n" + str(tags))
+
+    def decode_to_dict(self,  card_name: str, encoded_vector: np.array) -> str:
+        idx = 0
+
+        card_types = [self.card_types[i] for i, v in enumerate(encoded_vector[idx:idx+len(self.card_types)]) if v == 1]
+        idx += len(self.card_types)
+
+        supertypes = [self.card_supertypes[i] for i, v in enumerate(encoded_vector[idx:idx+len(self.card_supertypes)]) if v == 1]
+        idx += len(self.card_supertypes)
+
+        subtypes = [self.large_subtypes[i] for i, v in enumerate(encoded_vector[idx:idx+len(self.large_subtypes)]) if v == 1]
+        idx += len(self.large_subtypes)
+
+        mana_cost = int(encoded_vector[idx])
+        idx += 1
+
+        color_identity = [self.color_identities[i] for i, v in enumerate(encoded_vector[idx:idx+len(self.color_identities)]) if v == 1]
+        idx += len(self.color_identities)
+
+        rarity = self.int_to_rarity(encoded_vector[idx])
+        idx += 1
+
+        tags = [self.tags[i] for i, v in enumerate(encoded_vector[idx:idx+len(self.tags)]) if v == 1]
+
+    
+        return ({"Name":str(card_name),"Types":str(card_types),"Supertypes":str(supertypes),"Subtypes":str(subtypes),\
+                 "Mana Cost":str(mana_cost),"Color Identity":str(color_identity),"Rarity":str(rarity),"Tags":str(tags)})
+
+    def int_to_rarity(self, rarity_int: int) -> str:
+        rarity_map = {
+            1: 'Common',
+            2: 'Uncommon',
+            3: 'Rare',
+            4: 'Mythic',
+            5: 'Timeshifted',
+            6: 'Masterpiece',
+            7: 'Special'
+        }
+        return rarity_map.get(rarity_int, 'Unknown')
+        

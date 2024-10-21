@@ -1,4 +1,4 @@
-from Card import Card
+from CARD_DATA import Card
 import os, re
 import pandas as pd
 import boto3
