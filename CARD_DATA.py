@@ -26,7 +26,7 @@ class Card(object):
         text = text.replace(self.card_name,'').lower()
         tags_general = {
             'aggro': ['haste', 'attack each turn',],
-            'control': ['destroy target', 'exile target', 'return target', 'tap target', 'prevent all damage', 'flash', 'scry','can\'t activate','can\'t attack','can\'t block','countered', 'return each', 'destroy that','gain control','tap all'],
+            'control': ['destroy target', 'exile target', 'return target', 'tap target', 'prevent all damage', 'flash', 'scry','can\'t activate','can\'t attack','can\'t block','countered', 'return each', 'destroy that','gain control','tap all','change the target'],
             'combo': ['You win the game','Opponent loses the game','for each','without paying it\'s mana cost', 'storm','cast for {0}','The legend rule doesn\'t apply','without paying its mana cost'],
             'ramp': ['add mana', 'search your library for a land', 'landfall','treasure', 'search your library for a basic land','basic lands','basic land'],
             'card_draw': ['draw a card','blood token','you may play that card this turn'],
@@ -36,7 +36,7 @@ class Card(object):
             'mill': ['put into your graveyard', 'mill', 'from the top of their library', 'library into graveyard'],
             'discard': ['discard a card', 'discard cards', 'each player discards', 'from their hand'],
             'reanimato': ['return target creature card', 'graveyard to the battlefield', 'reanimate', 'bring back', 'from your graveyard'],
-            'burn': ['damage to any target', 'damage to each opponent','damage to target creature','damage to target planeswalke','damage to any target'],
+            'burn': ['damage to any target', 'damage to each opponent','damage to target creature','damage to target planeswalke','damage to any target','deals damage equal to'],
             'enchantment': ['enchant', 'aura', 'whenever you cast an enchantment', 'constellation','saga'],
             'equipment': ['equip', 'attach', 'whenever equipped', 'whenever you attach'],
             'artifact': ['artifact', 'whenever you cast an artifact', 'metalcraft'],
@@ -46,7 +46,7 @@ class Card(object):
             'voltron': ['equip', 'attach', 'whenever equipped', 'whenever you attach', 'aura'],
             'infect': ['infect', 'poison counte', 'proliferate'],
             'stax': ['tap target', 'opponent can\'t untap', 'opponents can\'t draw', 'whenever an opponent','can\'t cast','can\'t activate','can\'t attack','prevent that damage','prevent damage','deals damage to you'],
-            'storm': ['storm', 'copy this spell', 'copy that spell', 'copy target spell','magecraft'],
+            'storm': ['storm', 'copy this spell', 'copy that spell', 'copy target spell','magecraft','copy target instant','copy target sorcery'],
             'graveyard': ['graveyard', 'return from your graveyard', 'mill','from your graveyard','unearth'],
             'sacrifice': ['sacrifice a creature', 'sacrifice a permanent', 'whenever you sacrifice'],
             'combat': ['combat damage to a playe', 'combat damage to an opponent', 'vigilance', 'combat damage', 'attacks','first strike', 'double strike','target attacking', 'target blocking', 'whenever you attack', 'whenever  attacks', 'whenever  blocks', 'each combat', 'blocks', 'attacking', 'blocking', 'can\'t be blocked', 'deals damage to a playe', 'Flying'],
@@ -302,7 +302,6 @@ class CardDecoder:
 
         tags = [self.tags[i] for i, v in enumerate(encoded_vector[idx:idx+len(self.tags)]) if v == 1]
 
-    
         return ({"Name":str(card_name),"Types":str(card_types),"Supertypes":str(supertypes),"Subtypes":str(subtypes),\
                  "Mana Cost":str(mana_cost),"Color Identity":str(color_identity),"Rarity":str(rarity),"Tags":str(tags)})
 

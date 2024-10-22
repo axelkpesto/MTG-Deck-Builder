@@ -16,6 +16,12 @@ def get_vector(v_id):
     return jsonify({"vector": vector.tolist() if vector is not None else None})
 
 #Example Request:
+#(Invoke-RestMethod -Uri "http://127.0.0.1:5000/get_vector_description/Shunt")
+@app.route('/get_vector_description/<string:v_id>', methods=['GET'])
+def get_vector_description(v_id):
+    return jsonify(vd.get_vector_description_dict(v_id=v_id))
+
+#Example Request:
 #curl http://127.0.0.1:5000/get_random_vector
 @app.route('/get_random_vector', methods=['GET'])
 def get_random_vector():

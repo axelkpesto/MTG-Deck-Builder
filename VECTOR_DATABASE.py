@@ -375,3 +375,17 @@ class VectorDatabase(object):
         if runtime: print("PARSING DATASET: " + str(time.time()-start_time))
         return set_data
 
+
+if __name__ == "__main__":
+    vd = VectorDatabase(False)
+    vd.parse_json(filename="AllPrintings.json", runtime=True)
+    random_vector: tuple[str, np.array] = vd.get_random_vector()
+    
+    print(random_vector)
+    print()
+    print(vd.get_vector_description(random_vector[0]))
+
+    print()
+    similar_vectors = vd.get_similar_vectors(random_vector[1])
+    for vector in similar_vectors:
+        print("\n" + vd.get_vector_description(vector[0]))
