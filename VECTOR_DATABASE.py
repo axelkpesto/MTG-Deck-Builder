@@ -88,6 +88,20 @@ class VectorStore(object):
         """
         return self.vector_data.get(v_id, None)
     
+    def get_vector_tup(self, v_id: str) -> np.array:
+        """
+        Get tuple of ID and Vector that corresponds to a certain ID
+
+        Parameters: 
+            v_id: str
+                ID for the vector
+        
+        Output:
+            tuple[str,np.array or None]
+                tuple[str,np.array] if ID is in the database, else tuple[str,None]
+        """
+        return (v_id,self.get_vector(v_id))
+
     def get_random_vector(self) -> tuple[str, np.array]:
         """
         Get a random (ID, Vector) pair from Database
@@ -143,7 +157,7 @@ class VectorStore(object):
             dot_products = cp.dot(all_vectors, query_vector)
             similarities = cp.asnumpy(dot_products / (cp.linalg.norm(all_vectors, axis=1) * query_norm))
             
-            for idx, (vector_id, _) in enumerate(self.vector_data.items()):                
+            for idx, (vector_id, _) in enumerate(self.vector_data.items()):              
                 if i + idx < len(self.vector_data) and idx < len(similarities):
                     if vector_id not in self.vector_indexes:
                         self.vector_indexes[vector_id] = {}
@@ -176,8 +190,23 @@ class VectorStore(object):
             results.append((vector_id, similarity.get()))
 
         results.sort(key=lambda x: x[1], reverse=True)
-        return results[:n_results]
+        return results[:n_results+1]
     
+    def find_vector_pair(self, q_id: str) -> tuple[str, np.array]:
+        if q_id in self.vector_data:
+            return self.get_vector_tup(q_id)
+        else:
+            for id, _ in self.vector_data.items():
+                if q_id in id:
+                    return self.get_vector_tup(id)
+            raise KeyError(("KeyError:" + str(q_id)))
+    
+    def find_vector(self, q_id: str) -> np.array:
+        return self.find_vector_pair(q_id)[1]
+    
+    def find_id(self, q_id: str) -> str:
+        return self.find_vector_pair(q_id)[0]
+
     def describe_vector_string(self, v_id: str) -> str:
         """
         String representation of given vector
@@ -299,6 +328,9 @@ class VectorDatabase(object):
     def get_vector(self, v_id: str) -> np.array:
         return self.vector_store.get_vector(v_id)
     
+    def get_vector_tup(self, v_id: str) -> tuple[str,np.array]:
+        return self.vector_store.get_vector_tup(v_id)
+    
     def get_random_vector(self) -> tuple[str, np.array]:
         """
         Get a random (ID, Vector) pair from Database
@@ -311,7 +343,7 @@ class VectorDatabase(object):
                 A random (ID, Vector) pair from the DataBase
         """
         return self.vector_store.get_random_vector()
-
+    
     def get_similar_vectors(self, q_vector: np.array, n_results: int = 5) -> list[tuple[str, np.array]]:
         """
         Updates the stored similarity indexes for given vector
@@ -327,6 +359,15 @@ class VectorDatabase(object):
                 list of (ID, Vector) pairs
         """
         return self.vector_store.get_similar_vectors(q_vector,n_results)
+    
+    def find_vector_pair(self, v_id: str) -> tuple[str,np.array]:
+        return self.vector_store.find_vector_pair(v_id)
+    
+    def find_vector(self, v_id: str) -> np.array:
+        return self.vector_store.find_vector(v_id)
+
+    def find_id(self, v_id: str) -> str:
+        return self.vector_store.find_id(v_id)
     
     def get_vector_description(self, v_id: str) -> str:
         """
@@ -378,7 +419,7 @@ class VectorDatabase(object):
 
 if __name__ == "__main__":
     vd = VectorDatabase(False)
-    vd.parse_json(filename="AllPrintings.json", runtime=True)
+    vd.parse_json(filename="AllPrintings.json", runtime=True, max_lines=2500)
     random_vector: tuple[str, np.array] = vd.get_random_vector()
     
     print(random_vector)
@@ -387,5 +428,9 @@ if __name__ == "__main__":
 
     print()
     similar_vectors = vd.get_similar_vectors(random_vector[1])
-    for vector in similar_vectors:
-        print("\n" + vd.get_vector_description(vector[0]))
+    vd.get_vector_description_dict(similar_vectors[0][0])
+
+
+    print(vd.find_id("Horus"))
+    print(vd.find_id("Magnus"))
+    print(vd.find_vector_pair("Abaddon"))
