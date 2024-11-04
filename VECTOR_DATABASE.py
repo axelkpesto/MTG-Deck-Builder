@@ -54,15 +54,15 @@ class VectorStore(object):
         crd_tuple = self.encoder.encode(crd)
         self.add_vector(crd_tuple[0], crd_tuple[1], runtime=runtime)
 
-    def add_vector(self, v_id: str, vector: np.array, runtime=False) -> None:
+    def add_vector(self, v_id: str, vector: np.ndarray, runtime=False) -> None:
         """
         Adding Card to Vector Database given a vector ID and the corresponding encoded vector.
 
         Parameters: 
             v_id: str
                 ID for the vector
-            vector: np.array
-                Corresponding vector (np.array) to ID
+            vector: np.ndarray
+                Corresponding vector (np.ndarray) to ID
             runtime: bool
                 Whether the runtime of adding the data should be displayed
         
@@ -74,7 +74,7 @@ class VectorStore(object):
         self.vector_data[v_id] = vector
         self._update_index(v_id, vector, runtime=runtime)
 
-    def get_vector(self, v_id: str) -> np.array:
+    def get_vector(self, v_id: str) -> np.ndarray:
         """
         Get vector that corresponds to a certain ID
 
@@ -83,12 +83,12 @@ class VectorStore(object):
                 ID for the vector
         
         Output:
-            np.array or None
-                np.array if ID is in the database, else None
+            np.ndarray or None
+                np.ndarray if ID is in the database, else None
         """
         return self.vector_data.get(v_id, None)
     
-    def get_vector_tup(self, v_id: str) -> np.array:
+    def get_vector_tup(self, v_id: str) -> tuple[str, np.ndarray]:
         """
         Get tuple of ID and Vector that corresponds to a certain ID
 
@@ -97,12 +97,12 @@ class VectorStore(object):
                 ID for the vector
         
         Output:
-            tuple[str,np.array or None]
-                tuple[str,np.array] if ID is in the database, else tuple[str,None]
+            tuple[str,np.ndarray or None]
+                tuple[str,np.ndarray] if ID is in the database, else tuple[str,None]
         """
-        return (v_id,self.get_vector(v_id))
+        return (v_id, self.get_vector(v_id))
 
-    def get_random_vector(self) -> tuple[str, np.array]:
+    def get_random_vector(self) -> tuple[str, np.ndarray]:
         """
         Get a random (ID, Vector) pair from Database
 
@@ -110,7 +110,7 @@ class VectorStore(object):
             None
         
         Output:
-            tuple[str, np.array]
+            tuple[str, np.ndarray]
                 A random (ID, Vector) pair from the DataBase
         """
         random_id: str = random.choice(list(self.vector_data.keys()))
@@ -129,14 +129,14 @@ class VectorStore(object):
         """
         return len(self.vector_data.keys())
     
-    def _update_index(self, v_id: str, vector: np.array, batch_size: int = 1000, runtime: bool = False) -> None:
+    def _update_index(self, v_id: str, vector: np.ndarray, batch_size: int = 1000, runtime: bool = False) -> None:
         """
         Updates the stored similarity indexes for given vector
 
         Parameters: 
             v_id: str
                 ID of Vector
-            vector: np.array
+            vector: np.ndarray
                 Corresponding vector to ID
             batch_size: int
                 How many vectors are processed in each iteration (for optimization)
@@ -165,18 +165,18 @@ class VectorStore(object):
 
         if runtime: print("RUNTIME OF UPDATING INDEX: " + str(time.time() - start) + ", INDEX: " + str(len(self.vector_data.items())))
 
-    def get_similar_vectors(self, q_vector: np.array, n_results: int = 5) -> list[tuple[str, np.array]]:
+    def get_similar_vectors(self, q_vector: np.ndarray, n_results: int = 5) -> list[tuple[str, np.ndarray]]:
         """
         Updates the stored similarity indexes for given vector
 
         Parameters: 
-            q_vector: np.array
+            q_vector: np.ndarray
                 Query vector
             n_results: int
                 Number of similar vectors
         
         Output:
-            list[tuple[str, np.array]]
+            list[tuple[str, np.ndarray]]
                 list of (ID, Vector) pairs
         """
         q_vector_gpu = cp.asarray(q_vector)
@@ -192,7 +192,7 @@ class VectorStore(object):
         results.sort(key=lambda x: x[1], reverse=True)
         return results[:n_results+1]
     
-    def find_vector_pair(self, q_id: str) -> tuple[str, np.array]:
+    def find_vector_pair(self, q_id: str) -> tuple[str, np.ndarray]:
         if q_id in self.vector_data:
             return self.get_vector_tup(q_id)
         else:
@@ -201,7 +201,7 @@ class VectorStore(object):
                     return self.get_vector_tup(id)
             raise KeyError(("KeyError:" + str(q_id)))
     
-    def find_vector(self, q_id: str) -> np.array:
+    def find_vector(self, q_id: str) -> np.ndarray:
         return self.find_vector_pair(q_id)[1]
     
     def find_id(self, q_id: str) -> str:
@@ -247,7 +247,7 @@ class VectorDatabase(object):
         self.RUNTIME = RUNTIME
         self.vector_store = VectorStore()
 
-    def parse_json(self, filename:str, runtime:bool = False, max_lines:int = None) -> VectorStore:
+    def parse_json(self, filename: str, runtime: bool = False, max_lines: int = -1) -> VectorStore:
         """
         Build DataBase from JSON
 
@@ -265,18 +265,18 @@ class VectorDatabase(object):
         """
         assert os.path.isfile(filename), f"{filename} not found."
         
-        set_data = self._parse_file(filename=filename, runtime=runtime)
+        set_data: pd.DataFrame = self._parse_file(filename=filename, runtime=runtime)
         
         start_time: float = time.time()
         num_cards: int = 0
-
+        
         for game_set in set_data:
             for card in game_set['cards']:
                 if 'commander' in card['legalities'] and card['legalities']['commander']=="Legal" and 'paper' in card['availability']:
                     self.vector_store.add_card(Card(card), runtime=self.RUNTIME)
                     num_cards += 1
 
-                    if max_lines is not None and num_cards>=max_lines:
+                    if max_lines>-1 and num_cards>=max_lines:
                         if runtime: print("BUILDING DATABASE: " + str(time.time()-start_time))
                         return self.vector_store
 
@@ -297,7 +297,7 @@ class VectorDatabase(object):
         """
         return self.vector_store.contains(value)
 
-    def add_card(self, crd:Card) -> None:
+    def add_card(self, crd: Card) -> None:
         """
         Adding Card to VectorStore
 
@@ -310,14 +310,14 @@ class VectorDatabase(object):
         """
         self.vector_store.add_card(crd)
 
-    def add_vector(self, v_id: str, vector: np.array) -> None:
+    def add_vector(self, v_id: str, vector: np.ndarray) -> None:
         """
         Adding Card to VectorStore
 
         Parameters: 
             v_id: str
                 ID of Vector
-            vector: np.array
+            vector: np.ndarray
                 Corresponding Vector to ID
         
         Output:
@@ -325,13 +325,13 @@ class VectorDatabase(object):
         """
         self.vector_store.add_vector(v_id,vector)
 
-    def get_vector(self, v_id: str) -> np.array:
+    def get_vector(self, v_id: str) -> np.ndarray:
         return self.vector_store.get_vector(v_id)
     
-    def get_vector_tup(self, v_id: str) -> tuple[str,np.array]:
+    def get_vector_tup(self, v_id: str) -> tuple[str, np.ndarray]:
         return self.vector_store.get_vector_tup(v_id)
     
-    def get_random_vector(self) -> tuple[str, np.array]:
+    def get_random_vector(self) -> tuple[str, np.ndarray]:
         """
         Get a random (ID, Vector) pair from Database
 
@@ -339,31 +339,31 @@ class VectorDatabase(object):
             None
         
         Output:
-            tuple[str, np.array]
+            tuple[str, np.ndarray]
                 A random (ID, Vector) pair from the DataBase
         """
         return self.vector_store.get_random_vector()
     
-    def get_similar_vectors(self, q_vector: np.array, n_results: int = 5) -> list[tuple[str, np.array]]:
+    def get_similar_vectors(self, q_vector: np.ndarray, n_results: int = 5) -> list[tuple[str, np.ndarray]]:
         """
         Updates the stored similarity indexes for given vector
 
         Parameters: 
-            q_vector: np.array
+            q_vector: np.ndarray
                 Query vector
             n_results: int
                 Number of similar vectors
         
         Output:
-            list[tuple[str, np.array]]
+            list[tuple[str, np.ndarray]]
                 list of (ID, Vector) pairs
         """
         return self.vector_store.get_similar_vectors(q_vector,n_results)
     
-    def find_vector_pair(self, v_id: str) -> tuple[str,np.array]:
+    def find_vector_pair(self, v_id: str) -> tuple[str,np.ndarray]:
         return self.vector_store.find_vector_pair(v_id)
     
-    def find_vector(self, v_id: str) -> np.array:
+    def find_vector(self, v_id: str) -> np.ndarray:
         return self.vector_store.find_vector(v_id)
 
     def find_id(self, v_id: str) -> str:
@@ -397,7 +397,7 @@ class VectorDatabase(object):
         """
         return self.vector_store.describe_vector_dict(v_id=v_id)
 
-    def _parse_file(self, filename:str, runtime:bool = False) -> pd.DataFrame:
+    def _parse_file(self, filename: str, runtime: bool = False) -> pd.DataFrame:
         """
         Private file parsing function for readability
 
@@ -416,11 +416,10 @@ class VectorDatabase(object):
         if runtime: print("PARSING DATASET: " + str(time.time()-start_time))
         return set_data
 
-
 if __name__ == "__main__":
     vd = VectorDatabase(False)
     vd.parse_json(filename="AllPrintings.json", runtime=True, max_lines=2500)
-    random_vector: tuple[str, np.array] = vd.get_random_vector()
+    random_vector: tuple[str, np.ndarray] = vd.get_random_vector()
     
     print(random_vector)
     print()

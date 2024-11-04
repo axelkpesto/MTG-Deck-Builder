@@ -4,22 +4,22 @@ import re
 class Card(object):
     def __init__(self, cd:dict) -> None:
         if cd is None or {}: return
-        self.card_name: str = str(cd['name']) if 'name' in cd else None #Name of the Card. None if property doesn't exist.
-        self.card_types: list[str] =  [str(x).lower() for x in cd['types']]  if 'types' in cd else None #Card Types (EX: CREATURE) of the Card. None if property doesn't exist.
-        self.card_supertypes: str = str(cd['supertypes']).lower() if 'supertypes' in cd else None #Supertypes (EX: LEGENDARY) of the Card. None if property doesn't exist.
-        self.card_subtypes: list[str] = [str(x).lower() for x in cd['subtypes']]  if 'subtypes' in cd else None #Subtypes (EX: GOBLIN) of the Card. None if property doesn't exist.
-        self.mana_cost: int = cd['manaValue']  if 'manaValue' in cd else None #Numerical Mana Cost of the Card. None if property doesn't exist.
-        self.mana_cost_exp: str = cd['manaCost']  if 'manaCost' in cd else None #Expanded Mana Cost of the Card. None if property doesn't exist.
-        self.color_identity: list[str] = [x.upper() for x in sorted([x for x in list(set(self.mana_cost_exp)) if x.isalpha()])] if 'manaCost' in cd else None #Colors contained in the Expanded Mana Cost of the Card. None if property doesn't exist.
-        self.defense: str = cd['defense'] if 'defense' in cd else None #Defense of a Battle Card. None if the Card is not a Battle.
-        self.rarity: str = cd['rarity']  if 'rarity' in cd else None #Rarity (EX: UNCOMMON) of the Card. None if property doesn't exist.
-        self.text: str = cd['text']  if 'text' in cd else None #Text of the Card. None if property doesn't exist.
-        self.rank: int = cd['edhrecRank']  if 'edhrecRank' in cd else None #EDHREC Rank of the Card. None if property doesn't exist.
-        self.power: str = cd['power'] if 'Creature' in self.card_types and 'power' in cd else None #Power of a Creature Card. None if Card is not a Creature.
-        self.toughness: str = cd['toughness'] if 'Creature' in self.card_types and 'toughness' in cd else None #Toughness of a Creature Card. None if Card is not a Creature.
-        self.loyalty: str = cd['loyalty'] if 'Planeswalker' in self.card_types and 'loyalty' in cd else None #Starting Loyalty of a Planeswalker Card. None if Card is not a Planeswalker.
-        self.id: str = cd['identifiers']['multiverseId'] if 'identifiers' in cd and 'multiverseId' in cd['identifiers'] else None #MultiverseID Identifier
-        self.tags: list[str] = [x.lower() for x in list(self.tag_text(self.text).union(self.tag_subtypes(str(self.card_subtypes))))] #Tagging cards for data analysis
+        self.card_name: str = str(cd['name']) if 'name' in cd else "" #Name of the Card. None if property doesn't exist.
+        self.card_types: list[str] =  [str(x).lower() for x in cd['types']]  if 'types' in cd else [] #Card Types (EX: CREATURE) of the Card. None if property doesn't exist.
+        self.card_supertypes: str = str(cd['supertypes']).lower() if 'supertypes' in cd else "" #Supertypes (EX: LEGENDARY) of the Card. None if property doesn't exist.
+        self.card_subtypes: list[str] = [str(x).lower() for x in cd['subtypes']]  if 'subtypes' in cd else [] #Subtypes (EX: GOBLIN) of the Card. None if property doesn't exist.
+        self.mana_cost: int = cd['manaValue']  if 'manaValue' in cd else -1 #Numerical Mana Cost of the Card. None if property doesn't exist.
+        self.mana_cost_exp: str = cd['manaCost']  if 'manaCost' in cd else "" #Expanded Mana Cost of the Card. None if property doesn't exist.
+        self.color_identity: list[str] = [x.upper() for x in sorted([x for x in list(set(self.mana_cost_exp)) if x.isalpha()])] if 'manaCost' in cd else [] #Colors contained in the Expanded Mana Cost of the Card. None if property doesn't exist.
+        self.defense: str = cd['defense'] if 'defense' in cd else "" #Defense of a Battle Card. None if the Card is not a Battle.
+        self.rarity: str = cd['rarity']  if 'rarity' in cd else "" #Rarity (EX: UNCOMMON) of the Card. None if property doesn't exist.
+        self.text: str = cd['text']  if 'text' in cd else "" #Text of the Card. None if property doesn't exist.
+        self.rank: int = cd['edhrecRank']  if 'edhrecRank' in cd else "" #EDHREC Rank of the Card. None if property doesn't exist.
+        self.power: str = cd['power'] if 'Creature' in self.card_types and 'power' in cd else "" #Power of a Creature Card. None if Card is not a Creature.
+        self.toughness: str = cd['toughness'] if 'Creature' in self.card_types and 'toughness' in cd else "" #Toughness of a Creature Card. None if Card is not a Creature.
+        self.loyalty: str = cd['loyalty'] if 'Planeswalker' in self.card_types and 'loyalty' in cd else "" #Starting Loyalty of a Planeswalker Card. None if Card is not a Planeswalker.
+        self.id: str = cd['identifiers']['multiverseId'] if 'identifiers' in cd and 'multiverseId' in cd['identifiers'] else "" #MultiverseID Identifier
+        self.tags: list[str] = [x.lower() for x in list(self.tag_text(self.text).union(self.tag_subtypes(self.card_subtypes)))] #Tagging cards for data analysis
     
     def tag_text(self, text: str) -> set[str]:
         if text==None or text=="": return set()
@@ -34,30 +34,30 @@ class Card(object):
                     card_tags.add(str(tag).lower())
                     break
 
-        for tag, patterns in CardFields.joint_tags().items():
-          if tag in card_tags: continue
-          for pattern in patterns:
-              add = True
-              for i in range(len(pattern)):
-                  if pattern[i].lower() not in str(text):
-                      add = False
-                      break
-              if add: 
-                card_tags.add(str(tag).lower())
-                break
+        for tag, pattern_list in CardFields.joint_tags().items():
+            if tag in card_tags: continue
+            for patterns in pattern_list:
+                add = True
+                for pattern in patterns:
+                    if pattern.lower() not in str(text):
+                        add = False
+                        break
+                if add:
+                    card_tags.add(str(tag).lower())
+                    break
 
         for tag, patterns in CardFields.regex_tags().items():
-          if tag in card_tags: continue
-          for pattern in patterns:
-              if re.search(pattern, str(text), re.IGNORECASE):
-                  card_tags.add(str(tag).lower())
-                  break
+            if tag in card_tags: continue
+            for pattern in patterns:
+                if re.search(pattern, str(text), re.IGNORECASE):
+                    card_tags.add(str(tag).lower())
+                    break
         
         return card_tags
 
     def tag_subtypes(self, text: list[str]) -> set[str]:
         if text==None or text==[]: return set()
-        card_tags:set[str] = set()
+        card_tags: set[str] = set()
 
         for tag, patterns in CardFields.subtype_tags().items():
             for pattern in patterns:
@@ -209,16 +209,16 @@ class CardFields(object):
     def card_tags() -> list[str]: return sorted(CardFields.__tags_general.keys())
     
     @staticmethod
-    def general_tags() -> dict[str,str]: return CardFields.__tags_general
+    def general_tags() -> dict[str, list[str]]: return CardFields.__tags_general
 
     @staticmethod
-    def joint_tags() -> dict[str,str]: return CardFields.__tags_joint
+    def joint_tags() -> dict[str, list[list[str]]]: return CardFields.__tags_joint
 
     @staticmethod
-    def regex_tags() -> dict[str,str]: return CardFields.__tags_regex
+    def regex_tags() -> dict[str, list[str]]: return CardFields.__tags_regex
     
     @staticmethod
-    def subtype_tags() -> dict[str,str]: return CardFields.__subtype_tags
+    def subtype_tags() -> dict[str, list[str]]: return CardFields.__subtype_tags
 
 class CardEncoder(object):
     def __init__(self):
@@ -228,7 +228,7 @@ class CardEncoder(object):
         self.color_identities:list[str] = CardFields.color_identities()
         self.tags:list[str] = CardFields.card_tags()
 
-    def encode(self, crd:Card) -> tuple[str,np.array]:
+    def encode(self, crd: Card) -> tuple[str, np.ndarray]:
         ret = []
 
         cd = [0]*len(self.card_types)
@@ -270,7 +270,7 @@ class CardEncoder(object):
 
         return (crd.card_name, np.array(ret))
 
-    def rarity_to_int(self, name:str, rarity:str) -> int:
+    def rarity_to_int(self, name: str, rarity: str) -> int:
         match rarity.lower():
             case 'common':
                 return 1
@@ -290,15 +290,15 @@ class CardEncoder(object):
                 print("NAME: " + name + "RARITY?: " + str(rarity))
                 raise Exception('Rarity not found')
 
-class CardDecoder:
+class CardDecoder(object):
     def __init__(self):
-        self.card_types:list[str] = CardFields.card_types()
-        self.card_supertypes:list[str] = CardFields.card_supertypes()
-        self.all_subtypes:list[str] = CardFields.card_subtypes()
-        self.color_identities:list[str] = CardFields.color_identities()
-        self.tags:list[str] = CardFields.card_tags()
+        self.card_types: list[str] = CardFields.card_types()
+        self.card_supertypes: list[str] = CardFields.card_supertypes()
+        self.all_subtypes: list[str] = CardFields.card_subtypes()
+        self.color_identities: list[str] = CardFields.color_identities()
+        self.tags: list[str] = CardFields.card_tags()
 
-    def decode_to_string(self,  card_name: str, encoded_vector: np.array) -> str:
+    def decode_to_string(self,  card_name: str, encoded_vector: np.ndarray) -> str:
         idx = 0
 
         card_types = [self.card_types[i] for i, v in enumerate(encoded_vector[idx:idx+len(self.card_types)]) if v == 1]
@@ -319,12 +319,12 @@ class CardDecoder:
         rarity = self.int_to_rarity(encoded_vector[idx])
         idx += 1
 
-        tags = set([self.tags[i].capitalize() for i, v in enumerate(encoded_vector[idx:idx+len(self.tags)]) if v == 1])
+        tags = list(set([self.tags[i].capitalize() for i, v in enumerate(encoded_vector[idx:idx+len(self.tags)]) if v == 1]))
 
         return ("Name: " + str(card_name) + "\n Card Types: " + str(card_types) + "\n Card Supertypes: " + str(supertypes) + "\n Card Subtypes: " + str(subtypes) + \
                 "\n Mana Cost: " + str(mana_cost) + "\n Color Identity: " + str(color_identity) + "\n Rarity: " + str(rarity) + "\n Tags: \n" + str(tags))
 
-    def decode_to_dict(self,  card_name: str, encoded_vector: np.array) -> str:
+    def decode_to_dict(self,  card_name: str, encoded_vector: np.ndarray) -> dict[str, str]:
         idx = 0
 
         card_types = [self.card_types[i] for i, v in enumerate(encoded_vector[idx:idx+len(self.card_types)]) if v == 1]
@@ -345,7 +345,7 @@ class CardDecoder:
         rarity = self.int_to_rarity(encoded_vector[idx])
         idx += 1
 
-        tags = set([self.tags[i].capitalize() for i, v in enumerate(encoded_vector[idx:idx+len(self.tags)]) if v == 1])
+        tags = list(set([self.tags[i].capitalize() for i, v in enumerate(encoded_vector[idx:idx+len(self.tags)]) if v == 1]))
 
         return ({"Name": str(card_name), "Types": str(card_types), "Supertypes": str(supertypes), "Subtypes": str(subtypes),\
                  "Mana Cost": str(mana_cost), "Color Identity": str(color_identity), "Rarity": str(rarity), "Tags": str(tags)})
@@ -360,4 +360,5 @@ class CardDecoder:
             6: 'Masterpiece',
             7: 'Special'
         }
+
         return rarity_map.get(rarity_int, 'Unknown')

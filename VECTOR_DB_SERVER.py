@@ -76,4 +76,4 @@ def format_id(v_id: str):
     return ' '.join(capitalized_words)
 
 if __name__ == '__main__':
-    app.run(debug=True)
+    app.run(debug=False)
