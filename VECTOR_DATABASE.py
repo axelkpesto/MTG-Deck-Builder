@@ -2,7 +2,7 @@ from CARD_DATA import Card, CardEncoder, CardDecoder
 import cupy as cp
 import numpy as np
 import pandas as pd
-import time, os, random
+import time, os, random, boto3
 
 class VectorStore(object):
     def __init__(self):
@@ -16,7 +16,6 @@ class VectorStore(object):
         self.decoder = CardDecoder()
         self.vector_data: dict = {}
         self.vector_indexes: dict = {}
-
     
     def contains(self, value: object) -> bool:
         """
@@ -251,7 +250,7 @@ class VectorDatabase(object):
         """
         Build DataBase from JSON
 
-        Parameters: 
+        Parameters:
             filename: str
                 Name of JSON file you want passed in
             runtime: bool
@@ -263,17 +262,19 @@ class VectorDatabase(object):
             VectorStore:
                 VectorStore with first (max_lines) of JSON
         """
-        assert os.path.isfile(filename), f"{filename} not found."
         
-        set_data: pd.DataFrame = self._parse_file(filename=filename, runtime=runtime)
-        
+        if os.path.isfile(filename):
+            set_data: pd.DataFrame = self._parse_file(filename, runtime)
+        else:
+            set_data: pd.DataFrame = self._AWS_DATA_REQUEST(filename, runtime)
+
         start_time: float = time.time()
         num_cards: int = 0
         
         for game_set in set_data:
             for card in game_set['cards']:
                 if 'commander' in card['legalities'] and card['legalities']['commander']=="Legal" and 'paper' in card['availability']:
-                    self.vector_store.add_card(Card(card), runtime=self.RUNTIME)
+                    self.vector_store.add_card(Card(card), self.RUNTIME)
                     num_cards += 1
 
                     if max_lines>-1 and num_cards>=max_lines:
@@ -301,7 +302,7 @@ class VectorDatabase(object):
         """
         Adding Card to VectorStore
 
-        Parameters: 
+        Parameters:
             crd: Card
                 Card to be encoded and added to Vector Database
         
@@ -411,14 +412,37 @@ class VectorDatabase(object):
             pd.DataFrame
                 Pandas Dataframe containing data parsed from JSON
         """
-        start_time = time.time()
+        start_time: float = time.time()
+        assert os.path.isfile(filename), f"{filename} not found."
         set_data: pd.DataFrame = pd.read_json(filename)['data'][2:]
         if runtime: print("PARSING DATASET: " + str(time.time()-start_time))
         return set_data
 
+    def _AWS_DATA_REQUEST(self, filename: str, runtime: bool = False) -> pd.DataFrame:
+        start_time: float = time.time()
+        AWS_S3_BUCKET: str = 'allcarddata'
+        REGION_NAME: str = 'us-east-1'
+
+        AWS_ACCESS_KEY_ID: str = str(os.getenv("AWS_ACCESS_KEY_ID"))
+        AWS_SECRET_ACCESS_KEY: str = str(os.getenv("AWS_SECRET_ACCESS_KEY"))
+
+        s3_client: boto3.client = boto3.client(
+            service_name = "s3",
+            aws_access_key_id = AWS_ACCESS_KEY_ID,
+            aws_secret_access_key = AWS_SECRET_ACCESS_KEY,
+            region_name = REGION_NAME
+        )
+
+        response = s3_client.get_object(Bucket=AWS_S3_BUCKET, Key=filename)
+        status: int = response.get("ResponseMetadata", {}).get("HTTPStatusCode")
+        assert(status==200), "Invalid Request"
+
+        if runtime: print("AWS DATA REQUEST: " + str(time.time()-start_time))
+        return pd.read_json(response.get("Body"))['data'][2:]
+
 if __name__ == "__main__":
     vd = VectorDatabase(False)
-    vd.parse_json(filename="AllPrintings.json", runtime=True, max_lines=2500)
+    vd.parse_json(filename = "AllPrintings.json", runtime = True, max_lines = 2500)
     random_vector: tuple[str, np.ndarray] = vd.get_random_vector()
     
     print(random_vector)
@@ -428,7 +452,6 @@ if __name__ == "__main__":
     print()
     similar_vectors = vd.get_similar_vectors(random_vector[1])
     vd.get_vector_description_dict(similar_vectors[0][0])
-
 
     print(vd.find_id("Horus"))
     print(vd.find_id("Magnus"))

@@ -19,52 +19,7 @@ class Card(object):
         self.toughness: str = cd['toughness'] if 'Creature' in self.card_types and 'toughness' in cd else "" #Toughness of a Creature Card. None if Card is not a Creature.
         self.loyalty: str = cd['loyalty'] if 'Planeswalker' in self.card_types and 'loyalty' in cd else "" #Starting Loyalty of a Planeswalker Card. None if Card is not a Planeswalker.
         self.id: str = cd['identifiers']['multiverseId'] if 'identifiers' in cd and 'multiverseId' in cd['identifiers'] else "" #MultiverseID Identifier
-        self.tags: list[str] = [x.lower() for x in list(self.tag_text(self.text).union(self.tag_subtypes(self.card_subtypes)))] #Tagging cards for data analysis
-    
-    def tag_text(self, text: str) -> set[str]:
-        if text==None or text=="": return set()
-        text = text.replace(self.card_name,'').lower()
-
-        card_tags: set[str] = set()
-
-        for tag, patterns in CardFields.general_tags().items():
-            if tag in card_tags: continue
-            for pattern in patterns:
-                if pattern.lower() in text:
-                    card_tags.add(str(tag).lower())
-                    break
-
-        for tag, pattern_list in CardFields.joint_tags().items():
-            if tag in card_tags: continue
-            for patterns in pattern_list:
-                add = True
-                for pattern in patterns:
-                    if pattern.lower() not in str(text):
-                        add = False
-                        break
-                if add:
-                    card_tags.add(str(tag).lower())
-                    break
-
-        for tag, patterns in CardFields.regex_tags().items():
-            if tag in card_tags: continue
-            for pattern in patterns:
-                if re.search(pattern, str(text), re.IGNORECASE):
-                    card_tags.add(str(tag).lower())
-                    break
-        
-        return card_tags
-
-    def tag_subtypes(self, text: list[str]) -> set[str]:
-        if text==None or text==[]: return set()
-        card_tags: set[str] = set()
-
-        for tag, patterns in CardFields.subtype_tags().items():
-            for pattern in patterns:
-                if pattern in text:
-                    card_tags.add(str(tag).lower())
-                    break
-        return card_tags
+        self.tags: list[str] = [x.lower() for x in list(CardFields.tag_text(self.card_name, self.text).union(CardFields.tag_subtypes(self.card_subtypes)))] #Tagging cards for data analysis
 
     def __eq__(self, value: object) -> bool:
         if isinstance(value, Card):
@@ -219,14 +174,61 @@ class CardFields(object):
     
     @staticmethod
     def subtype_tags() -> dict[str, list[str]]: return CardFields.__subtype_tags
+    
+    @staticmethod
+    def tag_text(card_name: str, text: str) -> set[str]:
+        if text==None or text=="": return set()
+        text = text.replace(card_name,'').lower()
+
+        card_tags: set[str] = set()
+
+        for tag, patterns in CardFields.general_tags().items():
+            if tag in card_tags: continue
+            for pattern in patterns:
+                if pattern.lower() in text:
+                    card_tags.add(str(tag).lower())
+                    break
+
+        for tag, pattern_list in CardFields.joint_tags().items():
+            if tag in card_tags: continue
+            for patterns in pattern_list:
+                add = True
+                for pattern in patterns:
+                    if pattern.lower() not in str(text):
+                        add = False
+                        break
+                if add:
+                    card_tags.add(str(tag).lower())
+                    break
+
+        for tag, patterns in CardFields.regex_tags().items():
+            if tag in card_tags: continue
+            for pattern in patterns:
+                if re.search(pattern, str(text), re.IGNORECASE):
+                    card_tags.add(str(tag).lower())
+                    break
+        
+        return card_tags
+
+    @staticmethod
+    def tag_subtypes(text: list[str]) -> set[str]:
+        if text==None or text==[]: return set()
+        card_tags: set[str] = set()
+
+        for tag, patterns in CardFields.subtype_tags().items():
+            for pattern in patterns:
+                if pattern in text:
+                    card_tags.add(str(tag).lower())
+                    break
+        return card_tags
 
 class CardEncoder(object):
     def __init__(self):
-        self.card_types:list[str] = CardFields.card_types()
-        self.card_supertypes:list[str] = CardFields.card_supertypes()
-        self.all_subtypes:list[str] = CardFields.card_subtypes()
-        self.color_identities:list[str] = CardFields.color_identities()
-        self.tags:list[str] = CardFields.card_tags()
+        self.card_types: list[str] = CardFields.card_types()
+        self.card_supertypes: list[str] = CardFields.card_supertypes()
+        self.all_subtypes: list[str] = CardFields.card_subtypes()
+        self.color_identities: list[str] = CardFields.color_identities()
+        self.tags: list[str] = CardFields.card_tags()
 
     def encode(self, crd: Card) -> tuple[str, np.ndarray]:
         ret = []

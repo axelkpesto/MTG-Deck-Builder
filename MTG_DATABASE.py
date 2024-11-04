@@ -1,7 +1,7 @@
 from CARD_DATA import Card
 import os, re
 import pandas as pd
-import boto3, botocore
+import boto3
 
 class DataSet(object):
     def __init__(self):
@@ -11,9 +11,6 @@ class DataSet(object):
     def AWS_DATA_REQUEST(self, file: str) -> pd.DataFrame:
         AWS_S3_BUCKET: str = 'allcarddata'
         REGION_NAME: str = 'us-east-1'
-
-        assert(isinstance(os.getenv("AWS_ACCESS_KEY_ID"),str))
-        assert(isinstance(os.getenv("AWS_SECRET_ACCESS_KEY"),str))
 
         AWS_ACCESS_KEY_ID: str = str(os.getenv("AWS_ACCESS_KEY_ID"))
         AWS_SECRET_ACCESS_KEY: str = str(os.getenv("AWS_SECRET_ACCESS_KEY"))
@@ -35,7 +32,7 @@ class DataSet(object):
         return pd.read_json(filename)['data'][2:]
 
     def PARSE_SET_DATA(self) -> pd.DataFrame:
-        card_data:dict = dict()
+        card_data: dict = dict()
         for game_set in self.SET_DATAFRAME:
             for card in game_set['cards']:
                 if 'commander' in card['legalities'] and card['legalities']['commander']=="Legal" and 'paper' in card['availability']:
