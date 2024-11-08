@@ -59,11 +59,11 @@ class Card(object):
 
 class CardFields(object):
     __tags_general = {
-        'aggro': ['haste', 'attack each turn',],
+        'aggro': ['haste', 'attack each turn','attacks each turn', 'whenever a creature attacks', 'can\'t be blocked',],
         'control': ['destroy target', 'exile target', 'return target', 'tap target', 'prevent all damage', 'flash', 'scry','can\'t activate','can\'t attack','can\'t block','countered','return each','destroy that','gain control','tap all','change the target','return all'],
         'combo': ['You win the game','Opponent loses the game','for each','without paying it\'s mana cost', 'storm','cast for {0}','The legend rule doesn\'t apply','without paying its mana cost','rather than paying its mana value','rather than paying it\'s mana value','rather than paying its mana cost','rather than paying it\'s mana cost'],
         'ramp': ['add mana', 'search your library for a land', 'landfall','treasure', 'search your library for a basic land','basic lands','basic land'],
-        'card_draw': ['draw a card','blood token','you may play that card this turn'],
+        'card_draw': ['draw a card','blood token','you may play that card this turn', 'no maximum hand size'],
         'party': ['Cleric','Rogue','Warrio','Wizard','party'],
         'token': ['token', 'populate', 'copy', 'token creature', 'tokens you control'],
         'life_gain': ['gain life', 'whenever you gain life', 'life total', 'lifelink','food token','you gain that much life',],
@@ -71,48 +71,50 @@ class CardFields(object):
         'mill': ['put into your graveyard', 'mill', 'from the top of their library', 'library into graveyard'],
         'discard': ['discard a card', 'discard cards', 'each player discards', 'from their hand'],
         'reanimaton': ['return target creature card', 'graveyard to the battlefield', 'reanimate', 'bring back', 'from your graveyard','regenerate'],
-        'burn': ['damage to any target', 'damage to each opponent','damage to target creature','damage to target planeswalker','damage to any target','deals damage equal to'],
-        'enchantment': ['enchant', 'aura', 'whenever you cast an enchantment', 'constellation','saga'],
+        'burn': ['damage to any target', 'damage to each opponent','damage to target creature','damage to target planeswalker','damage to any target','deals damage equal to', 'twice that damage', 'double that damage', 'deal an additional', 'triple that damage', 'three times that much damage'],
+        'enchantment': ['enchant', 'aura', 'whenever you cast an enchantment', 'constellation', 'saga', 'unlock a room'],
         'equipment': ['equip', 'attach', 'whenever equipped', 'whenever you attach','when equipped'],
-        'artifact': ['artifact', 'whenever you cast an artifact', 'metalcraft'],
+        'artifact': ['artifact', 'whenever you cast an artifact', 'metalcraft', 'crew',],
         'planeswalker': ['planeswalker', 'loyalty', 'loyalty counter'],
         'tribal': ['Elf', 'Goblin', 'Zombie', 'Vampire', 'Warrior', 'Merfolk', 'Soldier', 'Dragon', 'Angel', 'Wizard', 'Knight', 'Sliver'],
         'flicker': ['exile and return', 'flicker', 'blink', 're-enter the battlefield'],
-        'voltron': ['equip', 'attach', 'whenever equipped', 'whenever you attach', 'aura'],
+        'voltron': ['equip', 'attach', 'whenever equipped', 'whenever you attach', 'aura',],
         'infect': ['infect', 'poison counter', 'proliferate'],
         'stax': ['tap target', 'opponent can\'t untap', 'opponents can\'t draw', 'whenever an opponent','can\'t cast','can\'t activate','can\'t attack','prevent that damage','prevent damage','deals damage to you'],
         'storm': ['storm', 'copy this spell', 'copy that spell', 'copy target spell','magecraft','copy target instant','copy target sorcery'],
-        'graveyard': ['graveyard', 'return from your graveyard', 'mill','from your graveyard','unearth'],
+        'graveyard': ['graveyard', 'return from your graveyard', 'mill','from your graveyard', 'unearth', 'flashback', 'surveil'],
         'sacrifice': ['sacrifice a creature', 'sacrifice a permanent', 'whenever you sacrifice','sacrifice'],
         'combat': ['combat damage to a player', 'combat damage to an opponent', 'vigilance', 'combat damage', 'attacks','first strike', 'double strike','target attacking', 'target blocking', 'whenever you attack', 'whenever  attacks', 'whenever  blocks', 'each combat', 'blocks', 'attacking', 'blocking', 'can\'t be blocked', 'deals damage to a player', 'flying','raid'],
         'outlaw': ['Assassin', 'Mercenary', 'Pirate', 'Rogue','Warlock'],
         'removal':['Destroy target','Destroy all','Exile target', 'Exile all','Remove from the game', 'Removed from the game', 'Destroy',],
-        'discard':['discard','madness','blood'],
+        'discard':['discard','madness','blood','cycling',],
         'buff':['all tokens you control','all creatures you control'],
         'etb':['enters the battlefield','enters under your control', 'enter the battlefield'],
-        'library_control':['scry','on top of your library','card into your hand','on the top of your library', 'look at the top'],
+        'library_control':['scry', 'on top of your library', 'card into your hand', 'on the top of your library', 'look at the top', 'surveil', 'from the top of your library', 'manifest'],
         'extb':['whenever a creature dies','whenever another creature dies', 'whenever a creature is put into your graveyard', 'whenever this creature dies', 'when  dies', 'regenerate'],
-        'protection':['indestructible','prevent all damage','protection from', 'shroud', 'hexproof', 'you have hexproof', 'you have shroud', 'creatures you control gain indestructible', 'creatures you control gain hexproof', 'creatures you control gain shroud', 'target creature you control gains hexproof']
+        'protection':['indestructible','prevent all damage','protection from', 'shroud', 'hexproof', 'you have hexproof', 'you have shroud', 'creatures you control gain indestructible', 'creatures you control gain hexproof', 'creatures you control gain shroud', 'target creature you control gains hexproof', 'ward']
     }
 
     __tags_joint = {
         'control':[['counter','spell'],],
         'ramp':[['Untap','Land'],['Search your library','land'],['Add','mana'],['Add','{','}'],],
         'protection':[['prevent','damage'],],
-        'flicker':[['exile','return']],
-        'life_gain':[['gain','life']],
-        'life_drain':[['lose','life'],['pay','life']],
+        'flicker':[['exile','return'],],
+        'life_gain':[['gain','life'],],
+        'life_drain':[['lose','life'],['pay','life'],],
+        'graveyard':[['return all','from your graveyard'],],
+        'library_control':[['exile the top','cards of your library'],],
     }
 
     __tags_regex = {
-        'aggro': [r'attack each turn', r'deal \d+ damage'],
+        'aggro': [r'deal \d+ damage'],
         'combo': [r'cast for {0}'],
         'control': [r'counter target \w spell',],
         'ramp': [r'add {\w}', r'search your library for a (|[a-zA-Z]+) land',],
         'card_draw': [r'draw (\d+|[a-zA-Z]+) cards',],
         'life_gain': [r'gain \d life',r'gain \w life',r'gains \d life',r'gains \w life'],
         'life_drain': [r'loses \d life',r'loses \w life',r'pays \d life',r'pays \w life'],
-        'burn': [r'deal \d+ damage', r'deals \d+ damage', r'deals \w damage'],
+        'burn': [r'deal \d+ damage', r'deals \d+ damage', r'deals \w damage',],
         'stax': [r'cost {\d+} more to cast'],
         'buff': [r'\+\d/\++\d',r'\+\w/\++\w',r'\+\w/\++\d',r'\+\d/\++\w',r'\-\d/\++\d',r'\-\w/\++\w',r'\-\w/\++\d',r'\-\d/\++\w',r'\+\d/\-+\d',r'\+\w/\-+\w',r'\+\w/\-+\d',r'\+\d/\-+\w'],
     }
@@ -138,7 +140,7 @@ class CardFields(object):
 
     __battle_subtypes = ['Seige']
 
-    __enchantment_subtypes = ['Aura', 'Background', 'Saga', 'Role', 'Shard', 'Cartouche', 'Case', 'Class', 'Curse', 'Rune', 'Shrine']
+    __enchantment_subtypes = ['Aura', 'Background', 'Saga', 'Role', 'Shard', 'Cartouche', 'Case', 'Class', 'Curse', 'Rune', 'Shrine', 'Room']
 
     __land_subtypes = ['Plains', 'Forest', 'Mountain', 'Island', 'Swamp', 'Cave', 'Desert', 'Gate', 'Lair', 'Locus', 'Mine', 'Power-Plant', 'Sphere', 'Tower', 'Urza']
 
