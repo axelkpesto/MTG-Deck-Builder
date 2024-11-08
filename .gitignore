@@ -1,3 +1,5 @@
 *.json
 *.txt
+.vscode
 __pycache__/
+env/

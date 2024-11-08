@@ -1,5 +1,5 @@
-from mtgsdk import Card # type: ignore
-from openai import OpenAI # type: ignore
+from mtgsdk import Card
+from openai import OpenAI
 import os
 
 client = OpenAI(api_key = os.environ.get("OPENAI_API_KEY"))

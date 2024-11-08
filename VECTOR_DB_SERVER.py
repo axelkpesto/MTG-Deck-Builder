@@ -6,7 +6,7 @@ vd = VectorDatabase()
 vd.parse_json("AllPrintings.json",runtime=True,max_lines=2500)
 
 #Example Request:
-#(Invoke-RestMethod -Uri "http://127.0.0.1:5000/get_vector/Shunt")
+#curl -X GET "http://127.0.0.1:5000/get_vector/Shunt"
 @app.route('/get_vector/<string:v_id>', methods=['GET'])
 def get_vector(v_id):
     try:
@@ -17,7 +17,7 @@ def get_vector(v_id):
     return jsonify({"vector": vector.tolist() if vector is not None else None})
 
 #Example Request:
-#(Invoke-RestMethod -Uri "http://127.0.0.1:5000/get_vector_description/Shunt")
+#curl -X GET "http://127.0.0.1:5000/get_vector_description/Shunt"
 @app.route('/get_vector_description/<string:v_id>', methods=['GET'])
 def get_vector_description(v_id):
     try:
@@ -35,13 +35,13 @@ def get_random_vector():
     return jsonify({"id":(random_vector[0]), "vector": random_vector[1].tolist() if random_vector[1] is not None else None})
 
 #Example Request:
-#(Invoke-RestMethod -Uri "http://127.0.0.1:5000/get_random_vector_description)
+#curl -X GET "http://127.0.0.1:5000/get_random_vector_description"
 @app.route('/get_random_vector_description', methods=['GET'])
 def get_random_vector_description():
     return jsonify(vd.get_vector_description_dict(vd.get_random_vector()[0]))
 
 #Example Request:
-#(Invoke-RestMethod -Uri "http://127.0.0.1:5000/get_similar_vectors/Shunt?num_vectors=10")
+#curl -X GET "http://127.0.0.1:5000/get_similar_vectors/Shunt?num_vectors=10"
 @app.route('/get_similar_vectors/<string:v_id>', methods=['GET'])
 def get_similar_vectors(v_id):
     try:
