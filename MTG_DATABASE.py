@@ -25,7 +25,7 @@ class DataSet(object):
         response = s3_client.get_object(Bucket=AWS_S3_BUCKET, Key=file)
         status = response.get("ResponseMetadata", {}).get("HTTPStatusCode")
         assert(status==200)
-        return pd.DataFrame(pd.read_json(response.get("Body"))['data'][2:])
+        return pd.read_json(response.get("Body"))['data'][2:]
 
     def JSON_DATA_SETUP(self, filename: str):
         assert os.path.isfile(filename), f"{filename} not found."
