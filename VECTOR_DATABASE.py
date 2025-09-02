@@ -1,25 +1,30 @@
-from CARD_DATA import Card, CardEncoder, CardDecoder
-import cupy as cp
+import torch
 import numpy as np
 import pandas as pd
-import time, os, random, boto3, copy
+import time
+import os
+import random
+import boto3
+from CARD_DATA import Card, CardEncoder, CardDecoder
 
-class _VectorStore(object):
-    def __init__(self, vector_data: dict = None, vector_indixes: dict = None, optimized: bool = False):
+class VectorStore(object):
+    def __init__(self) -> None:
         """
         Responsible for initializing the VectorStore object
+
+        Parameters:
+            None
         """
         self.encoder: CardEncoder = CardEncoder()
         self.decoder: CardDecoder = CardDecoder()
-        self.vector_data: dict = copy.deepcopy(vector_data) if vector_data is not None else {}
-        self.vector_indexes: dict = copy.deepcopy(vector_indixes) if vector_indixes is not None else {}
-        self.optimized: bool = optimized
+        self.vector_data: dict[str, torch.Tensor] = {}
+        self.device: torch.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     
     def __str__(self) -> str:
         return str(dict(map(lambda kv: (kv[0], self.decoder.decode_to_string(kv[0],kv[1])), self.items())))
     
     def __eq__(self, item) -> bool:
-        if not isinstance(item, _VectorStore): return False
+        if not isinstance(item, VectorStore): return False
         return self.vector_data.items()==item.vector_data.items()
 
     def __len__(self) -> int:
@@ -27,17 +32,23 @@ class _VectorStore(object):
 
     def __iter__(self) -> bool:
         return (x for x in self.vector_data.items())
-
+    
+    def __getitem__(self, key) -> torch.Tensor:
+        if isinstance(key, str):
+            return self.vector_data.get(key)
+        elif isinstance(key, int):
+            values = list(self.vector_data.keys())
+            if 0 <= key < len(values):
+                return values[key]
+            else:
+                raise IndexError("Index out of range")
+        else:
+            raise TypeError("Invalid key type for subscripting")
+    
     def clear(self) -> None:
         self.vector_data = {}
-        self.vector_indexes = {}
-    
-    def copy(self) -> '_VectorStore':
-        return _VectorStore \
-        (
-            vector_data=copy.deepcopy(self.vector_data),
-            vector_indixes=copy.deepcopy(self.vector_indexes)
-        )
+        if self.device.type == 'cuda':
+            torch.cuda.empty_cache()
 
     def items(self) -> list[tuple[str, np.array]]:
         return self.vector_data.items()
@@ -45,17 +56,17 @@ class _VectorStore(object):
     def keys(self) -> list[str]:
         return self.vector_data.keys()
     
-    def setdefault(self, v_id: str, vector: np.array) -> None:
-        return self.vector_data.setdefault(v_id, vector)
-
     def values(self) -> list[np.array]:
         return self.vector_data.values()
+
+    def setdefault(self, v_id: str, vector: np.array) -> None:
+        return self.vector_data.setdefault(v_id, vector)
 
     def contains(self, value: object) -> bool:
         """
         Checking if Value is contained in Vector Database
 
-        Parameters: 
+        Parameters:
             value: Object
                 Object to be checked for inclusion in Database
         
@@ -69,29 +80,27 @@ class _VectorStore(object):
             return value in self.vector_data
         return False
 
-    def add_card(self, crd: Card, runtime: bool = False) -> None:
+    def add_card(self, card: Card) -> None:
         """
         Adding Card to Vector Database through encoding
 
-        Parameters: 
-            crd: Card
+        Parameters:
+            card: Card
                 Card to be encoded and added to Vector Database
-            runtime: bool
-                Whether the runtime of adding the data should be displayed
         
         Output:
             None
         """
-        if self.contains(crd):
+        if self.contains(card):
             return
-        crd_tuple = self.encoder.encode(crd)
-        self.add_vector(crd_tuple[0], crd_tuple[1], runtime=runtime)
+        card_tuple = self.encoder.encode(card)
+        self.add_vector(card_tuple[0], card_tuple[1])
 
-    def add_vector(self, v_id: str, vector: np.ndarray, runtime: bool = False) -> None:
+    def add_vector(self, v_id: str, vector: np.ndarray) -> None:
         """
         Adding Card to Vector Database given a vector ID and the corresponding encoded vector.
 
-        Parameters: 
+        Parameters:
             v_id: str
                 ID for the vector
             vector: np.ndarray
@@ -104,81 +113,69 @@ class _VectorStore(object):
         """
         if self.contains(v_id):
             return
-        self.vector_data[v_id] = vector
-        if self.optimized: self._update_index(v_id, vector, batch_size=self._get_optimal_batch_size(), runtime=runtime)
+        vector_tensor = torch.tensor(vector, dtype=torch.float32).to(self.device)
+        self.vector_data[v_id] = vector_tensor
 
     def get_vector(self, v_id: str) -> np.ndarray:
         """
         Get vector that corresponds to a certain ID
 
-        Parameters: 
+        Parameters:
             v_id: str
                 ID for the vector
-        
+
         Output:
-            np.ndarray or None
-                np.ndarray if ID is in the database, else None
+            np.ndarray
+                np.ndarray if ID is in the database
         """
-        return self.find_vector(v_id)
-    
-    def get_vector_tup(self, v_id: str) -> tuple[str, np.ndarray]:
+        return self.vector_data[v_id].cpu().numpy()
+
+    def get_vector_tup(self, v_id: str) -> tuple[str, torch.tensor]:
         """
         Get tuple of ID and Vector that corresponds to a certain ID
 
-        Parameters: 
+        Parameters:
             v_id: str
                 ID for the vector
-        
-        Output:
-            tuple[str,np.ndarray or None]
-                tuple[str,np.ndarray] if ID is in the database, else tuple[str,None]
-        """
-        return (v_id, self.vector_data[v_id])
 
-    def get_random_vector(self) -> tuple[str, np.ndarray]:
+        Output:
+            tuple[str, torch.tensor or None]
+                tuple[str, torch.tensor] if ID is in the database, else tuple[str, None]
+        """
+        return (v_id, self.get_vector(v_id))
+
+    def get_random_vector(self) -> tuple[str, torch.tensor]:
         """
         Get a random (ID, Vector) pair from Database
 
-        Parameters: 
+        Parameters:
             None
         
         Output:
-            tuple[str, np.ndarray]
+            tuple[str, torch.tensor]
                 A random (ID, Vector) pair from the DataBase
         """
-        return (self.find_vector_pair(random.choice(list(self.vector_data.keys()))))
+        random_id: str = random.choice(list(self.vector_data.keys()))
+        return (random_id, self.get_vector(v_id=random_id))
 
-    def _get_optimal_batch_size(self, max_vector_dim: int = 320, vector_value_type = cp.float16) -> int:
-        free_memory, _ = cp.cuda.runtime.memGetInfo()
-        vector_bytes = np.dtype(vector_value_type).itemsize * max_vector_dim
-        batch_size = max(1024, free_memory // vector_bytes // 1024)
-        return int(min(batch_size, len(self)+1))
+    def size(self) -> int:
+        """
+        Get the current size of the database
 
-    def _update_index(self, v_id: str, vector: np.ndarray, batch_size: int = 8192, runtime: bool = False) -> None:
-        start = time.time()
-
-        query_vector = cp.asarray(vector, dtype=cp.float16)
+        Parameters:
+            None
         
-        if v_id not in self.vector_indexes:
-            self.vector_indexes[v_id] = {}
+        Output:
+            int
+                Number of keys in the database
+        """
+        return len(self.vector_data.keys())
 
-        vector_keys = list(self.vector_data.keys())
-        vector_values = cp.asarray(list(self.vector_data.values()), dtype=cp.float16)
-
-        indexes = {}
-
-        with cp.cuda.Stream():
-            for i in range(0, len(vector_values), batch_size):
-                distances = cp.sum((vector_values[i:i + batch_size].astype(cp.float16) - query_vector.astype(cp.float16)) ** 2, axis=1)
-                indexes.update({key: dist for key, dist in zip(vector_keys[i:i + batch_size], distances.get())})
-
-        self.vector_indexes[v_id] = indexes
-
-    def get_similar_vectors(self, v_id: str, n_results: int = 5) -> list[tuple[str, np.ndarray]]:
+    def get_similar_vectors(self, q_vector: torch.tensor, n_results: int = 5) -> list[tuple[str, torch.tensor]]:
         """
         Updates the stored similarity indexes for given vector
 
-        Parameters: 
+        Parameters:
             q_vector: np.ndarray
                 Query vector
             n_results: int
@@ -188,42 +185,31 @@ class _VectorStore(object):
             list[tuple[str, np.ndarray]]
                 list of (ID, Vector) pairs
         """
-        if self.optimized: return self.get_similar_vectors_optimized(v_id=v_id, n_results=n_results)
-        else: return self.get_similar_vectors_unoptimized(v_id=v_id, n_results=n_results)
-    
-    def get_similar_vectors_unoptimized(self, v_id: str, n_results: int = 5) -> list[tuple[str, np.ndarray]]:
-        q_vector_gpu = cp.asarray(self.find_vector(v_id), dtype=cp.float16)
-        q_vector_norm = cp.linalg.norm(q_vector_gpu)
+        q_vector_tensor = torch.tensor(q_vector, dtype=torch.float32).to(self.device)
 
         results = []
         for vector_id, vector in self.vector_data.items():
-            vector_gpu = cp.asarray(vector, dtype=cp.float16)
-            vector_norm = cp.linalg.norm(vector_gpu)
+            vector_tensor = vector.float().to(self.device)
+            similarity = torch.matmul(q_vector_tensor, vector_tensor) / (
+                torch.norm(q_vector_tensor) * torch.norm(vector_tensor)
+            )
+            results.append((vector_id, similarity.item()))
 
-            distance = cp.linalg.norm(q_vector_gpu - vector_gpu)
-            relative_distance = distance / (q_vector_norm + vector_norm)
-            
-            results.append((vector_id, relative_distance.get()))
+        results.sort(key=lambda x: x[1], reverse=True)
+        return results[:n_results + 1]
 
-        results.sort(key=lambda x: x[1])
-        return results[:n_results]
-    
-    def get_similar_vectors_optimized(self, v_id: str, n_results: int = 5) -> list[tuple[str, np.ndarray]]:
-        sorted_results = sorted(self.vector_indexes[v_id].items(), key=lambda x: x[1])
-        return sorted_results[:n_results]
-
-    def find_vector_pair(self, q_id: str) -> tuple[str, np.ndarray]:
+    def find_vector_pair(self, q_id: str) -> tuple[str, torch.tensor]:
         if q_id in self.vector_data:
             return self.get_vector_tup(q_id)
         else:
             for id, _ in self.vector_data.items():
                 if q_id in id:
                     return self.get_vector_tup(id)
-            raise KeyError(("KeyError:" + str(q_id)))
-    
-    def find_vector(self, q_id: str) -> np.ndarray:
+            raise KeyError(f"KeyError: {q_id}")
+
+    def find_vector(self, q_id: str) -> torch.tensor:
         return self.find_vector_pair(q_id)[1]
-    
+
     def find_id(self, q_id: str) -> str:
         return self.find_vector_pair(q_id)[0]
 
@@ -231,7 +217,7 @@ class _VectorStore(object):
         """
         String representation of given vector
 
-        Parameters: 
+        Parameters:
             v_id: str
                 ID of Vector
         
@@ -239,14 +225,13 @@ class _VectorStore(object):
             str
                 String representation of vector
         """
-        vector_pair = self.find_vector_pair(v_id)
-        return self.decoder.decode_to_string(vector_pair[0], vector_pair[1])
+        return self.decoder.decode_to_string(v_id, self.get_vector(v_id=v_id))
 
     def describe_vector_dict(self, v_id: str) -> dict:
         """
-        String representation of given vector
+        Dictionary representation of given vector
 
-        Parameters: 
+        Parameters:
             v_id: str
                 ID of Vector
         
@@ -254,61 +239,77 @@ class _VectorStore(object):
             dict
                 Dictionary representation of vector
         """
-        vector_pair = self.find_vector_pair(v_id)
-        return self.decoder.decode_to_dict(vector_pair[0], vector_pair[1])
+        return self.decoder.decode_to_dict(v_id, self.get_vector(v_id=v_id))
     
+    def save(self, filename: str) -> None:
+        torch.save(self.vector_data, filename)
+
+    def load(self, filename: str) -> None:
+        self.vector_data = torch.load(filename, map_location=self.device)
+
 class VectorDatabase(object):
-    def __init__(self, vector_store: _VectorStore = None, optimized: bool = True, runtime: bool = False):
+    def __init__(self, RUNTIME: bool = False) -> None:
         """
         Responsible for initializing the VectorDatabase object
+
+        Parameters:
+            RUNTIME: bool
+                Whether runtimes of functions should be displayed
         """
-        if vector_store is not None: assert(isinstance(vector_store, _VectorStore)), f"Incorrect parameter vector_store: _VectorStore, passed {type(vector_store).__name__}"
-        assert(isinstance(optimized, bool)), f"Incorrect parameter optimized: bool, passed {type(optimized).__name__}"
-        assert(isinstance(runtime, bool)), f"Incorrect parameter runtime: bool, passed {type(runtime).__name__}"
-        self._vector_store = vector_store if vector_store is not None else _VectorStore(optimized=optimized)
-        self._runtime = runtime
+        self.RUNTIME: bool = RUNTIME
+        self.vector_store: VectorStore = VectorStore()
 
     def __str__(self) -> str:
-        return str(self._vector_store)
+        return str(self.vector_store)
     
     def __eq__(self, item) -> bool:
         if not isinstance(item, VectorDatabase): return False
-        return (self._vector_store == item._vector_store) and (self._runtime == item._runtime)
+        return (self.vector_store == item.vector_store) and (self.RUNTIME == item.RUNTIME)
 
     def __len__(self) -> int:
-        return len(self._vector_store)
+        return len(self.vector_store)
 
     def __iter__(self) -> bool:
-        return (x for x in self._vector_store)
+        return (x for x in self.vector_store)
+    
+    def __getitem__(self, key) -> torch.Tensor:
+        if isinstance(key, str):
+            return self.vector_store[key]
+        elif isinstance(key, int):
+            if 0 <= key < len(self.vector_store):
+                self.vector_store[key]
+            else:
+                raise IndexError("Index out of range")
+        else:
+            raise TypeError("Invalid key type for subscripting")
 
     def size(self) -> int:
-        return len(self._vector_store)
+        return len(self.vector_store)
 
     def clear(self) -> None:
-        self._vector_store.clear()
-    
-    def copy(self) -> 'VectorDatabase':
-        return VectorDatabase(self._vector_store.copy(), self._runtime)
+        self.vector_store.clear()
 
     def items(self) -> list[tuple[str, np.array]]:
-        return self._vector_store.items()
+        return self.vector_store.items()
     
     def keys(self) -> list[str]:
-        return self._vector_store.keys()
+        return self.vector_store.keys()
     
     def values(self) -> list[np.array]:
-        return self._vector_store.values()
+        return self.vector_store.values()
 
     def setdefault(self, v_id: str, vector: np.array) -> None:
-        return self._vector_store.setdefault(v_id, vector)
+        return self.vector_store.setdefault(v_id, vector)
 
-    def parse_json(self, filename: str, max_lines: int = -1) -> int:
+    def parse_json(self, filename: str, runtime: bool = False, max_lines: int = -1) -> VectorStore:
         """
         Build DataBase from JSON
 
         Parameters:
             filename: str
                 Name of JSON file you want passed in
+            runtime: bool
+                Whether runtimes of function should be displayed
             max_lines: int
                 Maximum number of lines in DataBase
         
@@ -316,31 +317,45 @@ class VectorDatabase(object):
             VectorStore:
                 VectorStore with first (max_lines) of JSON
         """
+        set_data: pd.DataFrame = self._parse_file(filename, runtime) \
+                                 if os.path.isfile(filename) \
+                                 else \
+                                 self._AWS_DATA_REQUEST(filename, runtime)
         
-        if os.path.isfile(filename):
-            set_data: pd.DataFrame = self._parse_file(filename)
-        else:
-            set_data: pd.DataFrame = self._AWS_DATA_REQUEST(filename)
-
         start_time: float = time.time()
+        num_cards: int = 0
         
         for game_set in set_data:
             for card in game_set['cards']:
-                if 'commander' in card['legalities'] and card['legalities']['commander']=="Legal" and 'paper' in card['availability']:
-                    self._vector_store.add_card(Card(card), self._runtime)
+                if 'commander' in card['legalities'] and card['legalities']['commander'] == "Legal" and 'paper' in card['availability']:
+                    self.vector_store.add_card(Card(card))
+                    num_cards += 1
 
-                    if max_lines > -1 and len(self) >= max_lines:
-                        if self._runtime: print(f"BUILDING DATABASE: {time.time()-start_time}, DATASET SIZE: {len(self._vector_store)}")
-                        return len(self)
+                    if max_lines > -1 and num_cards >= max_lines:
+                        if runtime: 
+                            print("BUILDING DATABASE: " + str(time.time() - start_time))
+                        return self.vector_store
 
-        if self._runtime: print(f"BUILDING DATABASE: {time.time()-start_time}, DATASET SIZE: {len(self._vector_store)}")
-        return len(self)
+        if runtime: 
+            print("BUILDING DATABASE: " + str(time.time() - start_time))
+        return self.vector_store
+    
+    def parse_card_list(self, card_list: list[Card], runtime: bool = False) -> VectorStore:
+        start_time: float = time.time()
+
+        for card in card_list:
+            if card.commander_legal:
+                self.vector_store.add_card(card)
+
+        if runtime: 
+            print("BUILDING DATABASE: " + str(time.time() - start_time))
+        return self.vector_store
 
     def contains(self, value: object) -> bool:
         """
         Checking if Value is contained in Vector Database
 
-        Parameters: 
+        Parameters:
             value: Object
                 Object to be checked for inclusion in Database
         
@@ -348,26 +363,26 @@ class VectorDatabase(object):
             bool
                 Whether the object is in the Database
         """
-        return self._vector_store.contains(value)
+        return self.vector_store.contains(value)
 
-    def add_card(self, crd: Card) -> None:
+    def add_card(self, card: Card) -> None:
         """
         Adding Card to VectorStore
 
         Parameters:
-            crd: Card
+            card: Card
                 Card to be encoded and added to Vector Database
         
         Output:
             None
         """
-        self._vector_store.add_card(crd)
+        self.vector_store.add_card(card)
 
     def add_vector(self, v_id: str, vector: np.ndarray) -> None:
         """
         Adding Card to VectorStore
 
-        Parameters: 
+        Parameters:
             v_id: str
                 ID of Vector
             vector: np.ndarray
@@ -376,118 +391,88 @@ class VectorDatabase(object):
         Output:
             None
         """
-        self._vector_store.add_vector(v_id,vector)
+        self.vector_store.add_vector(v_id, vector)
 
-    def get_vector(self, v_id: str) -> np.ndarray:
-        return self._vector_store.get_vector(v_id)
+    def get_vector(self, v_id: str) -> torch.tensor:
+        return self.vector_store.get_vector(v_id)
     
-    def get_vector_tup(self, v_id: str) -> tuple[str, np.ndarray]:
-        return self._vector_store.get_vector_tup(v_id)
+    def get_vector_tup(self, v_id: str) -> tuple[str, torch.tensor]:
+        return self.vector_store.get_vector_tup(v_id)
     
-    def get_random_vector(self) -> tuple[str, np.ndarray]:
-        """
-        Get a random (ID, Vector) pair from Database
-
-        Parameters: 
-            None
-        
-        Output:
-            tuple[str, np.ndarray]
-                A random (ID, Vector) pair from the DataBase
-        """
-        return self._vector_store.get_random_vector()
+    def get_random_vector(self) -> tuple[str, torch.tensor]:
+        return self.vector_store.get_random_vector()
     
-    def get_similar_vectors(self, q_vector: np.ndarray, n_results: int = 5) -> list[tuple[str, np.ndarray]]:
-        """
-        Updates the stored similarity indexes for given vector
-
-        Parameters: 
-            q_vector: np.ndarray
-                Query vector
-            n_results: int
-                Number of similar vectors
-        
-        Output:
-            list[tuple[str, np.ndarray]]
-                list of (ID, Vector) pairs
-        """
-        return self._vector_store.get_similar_vectors(q_vector,n_results)
+    def get_similar_vectors(self, q_vector: torch.tensor, n_results: int = 5) -> list[tuple[str, torch.tensor]]:
+        return self.vector_store.get_similar_vectors(q_vector, n_results)
     
-    def find_vector_pair(self, v_id: str) -> tuple[str,np.ndarray]:
-        return self._vector_store.find_vector_pair(v_id)
+    def find_vector_pair(self, v_id: str) -> tuple[str, torch.tensor]:
+        return self.vector_store.find_vector_pair(v_id)
     
-    def find_vector(self, v_id: str) -> np.ndarray:
-        return self._vector_store.find_vector(v_id)
+    def find_vector(self, v_id: str) -> torch.tensor:
+        return self.vector_store.find_vector(v_id)
 
     def find_id(self, v_id: str) -> str:
-        return self._vector_store.find_id(v_id)
+        return self.vector_store.find_id(v_id)
     
     def get_vector_description(self, v_id: str) -> str:
-        """
-        String representation of given vector
-
-        Parameters: 
-            v_id: str
-                ID of Vector
-        
-        Output:
-            str
-                String representation of vector
-        """
-        return self._vector_store.describe_vector_string(v_id)
+        return self.vector_store.describe_vector_string(v_id=v_id)
     
     def get_vector_description_dict(self, v_id: str) -> dict:
-        """
-        String representation of given vector
+        return self.vector_store.describe_vector_dict(v_id=v_id)
 
-        Parameters: 
-            v_id: str
-                ID of Vector
-        
-        Output:
-            dict
-                Dictionary representation of vector
-        """
-        return self._vector_store.describe_vector_dict(v_id)
-
-    def _parse_file(self, filename: str) -> pd.DataFrame:
-        """
-        Private file parsing function for readability
-
-        Parameters: 
-            filename: str
-                Name of JSON file to be parsed
-            runtime: bool
-                Whether the runtime of adding the data should be displayed
-        
-        Output:
-            pd.DataFrame
-                Pandas Dataframe containing data parsed from JSON
-        """
+    def _parse_file(self, filename: str, runtime: bool = False) -> pd.DataFrame:
         start_time: float = time.time()
         assert os.path.isfile(filename), f"{filename} not found."
-        set_data: pd.DataFrame = pd.read_json(filename)['data'][2:]
-        if self._runtime: print(f"PARSING DATASET: {time.time()-start_time}")
+        set_data = pd.read_json(filename)['data'][2:]
+        if runtime: 
+            print("PARSING DATASET: " + str(time.time() - start_time))
         return set_data
 
-    def _AWS_DATA_REQUEST(self, filename: str, _AWS_S3_BUCKET = None, _REGION_NAME = None, _AWS_ACCESS_KEY_ID = None, _AWS_SECRET_ACCESS_KEY = None) -> pd.DataFrame:
+    def _AWS_DATA_REQUEST(self, filename: str, runtime: bool = False) -> pd.DataFrame:
         start_time: float = time.time()
-        AWS_S3_BUCKET: str = 'allcarddata' if _AWS_S3_BUCKET is None else _AWS_S3_BUCKET
-        REGION_NAME: str = 'us-east-1' if _REGION_NAME is None else _REGION_NAME
+        AWS_S3_BUCKET: str = 'allcarddata'
+        REGION_NAME: str = 'us-east-1'
 
-        AWS_ACCESS_KEY_ID: str = str(os.getenv("AWS_ACCESS_KEY_ID")) if _AWS_ACCESS_KEY_ID is None else _AWS_SECRET_ACCESS_KEY
-        AWS_SECRET_ACCESS_KEY: str = str(os.getenv("AWS_SECRET_ACCESS_KEY")) if AWS_SECRET_ACCESS_KEY is None else _AWS_SECRET_ACCESS_KEY
+        AWS_ACCESS_KEY_ID: str = str(os.getenv("AWS_ACCESS_KEY_ID"))
+        AWS_SECRET_ACCESS_KEY: str = str(os.getenv("AWS_SECRET_ACCESS_KEY"))
 
-        s3_client: boto3.client = boto3.client(
-            service_name = "s3",
-            aws_access_key_id = AWS_ACCESS_KEY_ID,
-            aws_secret_access_key = AWS_SECRET_ACCESS_KEY,
-            region_name = REGION_NAME
+        s3_client = boto3.client(
+            service_name="s3",
+            aws_access_key_id=AWS_ACCESS_KEY_ID,
+            aws_secret_access_key=AWS_SECRET_ACCESS_KEY,
+            region_name=REGION_NAME
         )
 
         response = s3_client.get_object(Bucket=AWS_S3_BUCKET, Key=filename)
         status: int = response.get("ResponseMetadata", {}).get("HTTPStatusCode")
-        assert(status==200), "Invalid Request"
+        assert status == 200, "Invalid Request"
 
-        if self._runtime: print(f"PARSING DATASET: {time.time()-start_time}")
+        if runtime: 
+            print("AWS DATA REQUEST: " + str(time.time() - start_time))
         return pd.read_json(response.get("Body"))['data'][2:]
+    
+    def save(self, filename: str) -> None:
+        self.vector_store.save(filename)
+
+    def load(self, filename: str) -> None:
+        self.vector_store.load(filename)
+
+
+if __name__ == "__main__":
+    vd = VectorDatabase(True)
+    vd.parse_json(filename="AllPrintings.json")
+    random_vector = vd.get_random_vector()
+
+    print(random_vector)
+    print()
+    print(vd.get_vector_description(random_vector[0]))
+
+    print()
+    similar_vectors = vd.get_similar_vectors(random_vector[1])
+    print(vd.get_vector_description_dict(similar_vectors[1][0]))
+
+    print(vd.find_id("Horus"))
+    print(vd.find_id("Magnus"))
+    print(vd.find_vector_pair("Abaddon"))
+
+    vd.save("vector_data.pt")

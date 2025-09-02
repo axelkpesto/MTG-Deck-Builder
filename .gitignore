@@ -1,5 +1,5 @@
 *.json
 *.txt
-.vscode
 __pycache__/
-env/
+venv/
+.mypy_cache/
