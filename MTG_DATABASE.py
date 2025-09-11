@@ -1,11 +1,11 @@
-from CARD_DATA import Card, CardFields
+from Card_Lib import CardFields
 import os, re
 import pandas as pd
 import boto3
 
 class DataSet(object):
     def __init__(self):
-        self.SET_DATAFRAME = self.JSON_DATA_SETUP("AllPrintings.json")
+        self.SET_DATAFRAME = self.JSON_DATA_SETUP("datasets/AllPrintings.json")
         self.card_set = self.PARSE_SET_DATA()
 
     def AWS_DATA_REQUEST(self, file: str) -> pd.DataFrame:
@@ -36,7 +36,7 @@ class DataSet(object):
         for game_set in self.SET_DATAFRAME:
             for card in game_set['cards']:
                 if 'commander' in card['legalities'] and card['legalities']['commander']=="Legal" and 'paper' in card['availability']:
-                    cd = Card(card)
+                    cd = CardFields.parse_mtgjson_card(card)
                     attributes = cd.get_attributes()
                     for attribute, value in attributes.items():
                         if attribute not in card_data:
@@ -71,4 +71,4 @@ class DataSet(object):
 
 if __name__ == "__main__":
     ds = DataSet()
-    ds.WRITE_DATA_JSON("CommanderCards.json")
+    ds.WRITE_DATA_JSON("datasets/CommanderCards.json")

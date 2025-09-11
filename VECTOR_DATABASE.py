@@ -1,27 +1,26 @@
 import torch
 import numpy as np
 import pandas as pd
-import time
 import os
 import random
 import boto3
-from CARD_DATA import Card, CardEncoder, CardDecoder
+from Card_Lib import CardEncoder, CardDecoder, CardFields
 
 class VectorStore(object):
-    def __init__(self) -> None:
+    def __init__(self, encoder, decoder) -> None:
         """
         Responsible for initializing the VectorStore object
 
         Parameters:
             None
         """
-        self.encoder: CardEncoder = CardEncoder()
-        self.decoder: CardDecoder = CardDecoder()
+        self.encoder = encoder
+        self.decoder = decoder
         self.vector_data: dict[str, torch.Tensor] = {}
         self.device: torch.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     
     def __str__(self) -> str:
-        return str(dict(map(lambda kv: (kv[0], self.decoder.decode_to_string(kv[0],kv[1])), self.items())))
+        return str(dict(map(lambda kv: (kv[0], self.decoder.decode(kv[0], kv[1])), self.items())))
     
     def __eq__(self, item) -> bool:
         if not isinstance(item, VectorStore): return False
@@ -74,40 +73,18 @@ class VectorStore(object):
             bool
                 Whether the object is in the Database
         """
-        if isinstance(value, Card):
-            return value.card_name in self.vector_data
-        elif isinstance(value, str):
-            return value in self.vector_data
-        return False
-
-    def add_card(self, card: Card) -> None:
-        """
-        Adding Card to Vector Database through encoding
-
-        Parameters:
-            card: Card
-                Card to be encoded and added to Vector Database
-        
-        Output:
-            None
-        """
-        if self.contains(card):
-            return
-        card_tuple = self.encoder.encode(card)
-        self.add_vector(card_tuple[0], card_tuple[1])
+        return value in self.vector_data
 
     def add_vector(self, v_id: str, vector: np.ndarray) -> None:
         """
-        Adding Card to Vector Database given a vector ID and the corresponding encoded vector.
+        Adding item to Vector Database given a vector ID and the corresponding encoded vector.
 
         Parameters:
             v_id: str
                 ID for the vector
             vector: np.ndarray
                 Corresponding vector (np.ndarray) to ID
-            runtime: bool
-                Whether the runtime of adding the data should be displayed
-        
+
         Output:
             None
         """
@@ -116,6 +93,9 @@ class VectorStore(object):
         vector_tensor = torch.tensor(vector, dtype=torch.float32).to(self.device)
         self.vector_data[v_id] = vector_tensor
 
+    def get(self, v_id: str, default):
+        return self.vector_data[v_id] if v_id in self.vector_data else default
+    
     def get_vector(self, v_id: str) -> np.ndarray:
         """
         Get vector that corresponds to a certain ID
@@ -225,22 +205,10 @@ class VectorStore(object):
             str
                 String representation of vector
         """
-        return self.decoder.decode_to_string(v_id, self.get_vector(v_id=v_id))
+        if self.decoder:
+            return self.decoder.decode(v_id, self.get_vector(v_id=v_id))
+        return f"{v_id}: {self.get_vector(v_id=v_id)}"
 
-    def describe_vector_dict(self, v_id: str) -> dict:
-        """
-        Dictionary representation of given vector
-
-        Parameters:
-            v_id: str
-                ID of Vector
-        
-        Output:
-            dict
-                Dictionary representation of vector
-        """
-        return self.decoder.decode_to_dict(v_id, self.get_vector(v_id=v_id))
-    
     def save(self, filename: str) -> None:
         torch.save(self.vector_data, filename)
 
@@ -248,23 +216,20 @@ class VectorStore(object):
         self.vector_data = torch.load(filename, map_location=self.device)
 
 class VectorDatabase(object):
-    def __init__(self, RUNTIME: bool = False) -> None:
+    def __init__(self, encoder, decoder) -> None:
         """
         Responsible for initializing the VectorDatabase object
-
-        Parameters:
-            RUNTIME: bool
-                Whether runtimes of functions should be displayed
         """
-        self.RUNTIME: bool = RUNTIME
-        self.vector_store: VectorStore = VectorStore()
+        self.encoder = encoder
+        self.decoder = decoder
+        self.vector_store: VectorStore = VectorStore(encoder, decoder)
 
     def __str__(self) -> str:
         return str(self.vector_store)
     
     def __eq__(self, item) -> bool:
         if not isinstance(item, VectorDatabase): return False
-        return (self.vector_store == item.vector_store) and (self.RUNTIME == item.RUNTIME)
+        return (self.vector_store == item.vector_store)
 
     def __len__(self) -> int:
         return len(self.vector_store)
@@ -301,15 +266,13 @@ class VectorDatabase(object):
     def setdefault(self, v_id: str, vector: np.array) -> None:
         return self.vector_store.setdefault(v_id, vector)
 
-    def parse_json(self, filename: str, runtime: bool = False, max_lines: int = -1) -> VectorStore:
+    def parse_json(self, filename: str, max_lines: int = -1) -> VectorStore:
         """
         Build DataBase from JSON
 
         Parameters:
             filename: str
                 Name of JSON file you want passed in
-            runtime: bool
-                Whether runtimes of function should be displayed
             max_lines: int
                 Maximum number of lines in DataBase
         
@@ -317,38 +280,22 @@ class VectorDatabase(object):
             VectorStore:
                 VectorStore with first (max_lines) of JSON
         """
-        set_data: pd.DataFrame = self._parse_file(filename, runtime) \
+        set_data: pd.DataFrame = self._parse_file(filename) \
                                  if os.path.isfile(filename) \
                                  else \
-                                 self._AWS_DATA_REQUEST(filename, runtime)
+                                 self._AWS_DATA_REQUEST(filename)
         
-        start_time: float = time.time()
         num_cards: int = 0
         
         for game_set in set_data:
             for card in game_set['cards']:
                 if 'commander' in card['legalities'] and card['legalities']['commander'] == "Legal" and 'paper' in card['availability']:
-                    self.vector_store.add_card(Card(card))
+                    v_id, vector = self.encoder.encode(CardFields.parse_mtgjson_card(card))
+                    self.vector_store.add_vector(v_id, vector)
                     num_cards += 1
 
                     if max_lines > -1 and num_cards >= max_lines:
-                        if runtime: 
-                            print("BUILDING DATABASE: " + str(time.time() - start_time))
                         return self.vector_store
-
-        if runtime: 
-            print("BUILDING DATABASE: " + str(time.time() - start_time))
-        return self.vector_store
-    
-    def parse_card_list(self, card_list: list[Card], runtime: bool = False) -> VectorStore:
-        start_time: float = time.time()
-
-        for card in card_list:
-            if card.commander_legal:
-                self.vector_store.add_card(card)
-
-        if runtime: 
-            print("BUILDING DATABASE: " + str(time.time() - start_time))
         return self.vector_store
 
     def contains(self, value: object) -> bool:
@@ -365,22 +312,9 @@ class VectorDatabase(object):
         """
         return self.vector_store.contains(value)
 
-    def add_card(self, card: Card) -> None:
-        """
-        Adding Card to VectorStore
-
-        Parameters:
-            card: Card
-                Card to be encoded and added to Vector Database
-        
-        Output:
-            None
-        """
-        self.vector_store.add_card(card)
-
     def add_vector(self, v_id: str, vector: np.ndarray) -> None:
         """
-        Adding Card to VectorStore
+        Adding Vector to VectorStore
 
         Parameters:
             v_id: str
@@ -392,6 +326,9 @@ class VectorDatabase(object):
             None
         """
         self.vector_store.add_vector(v_id, vector)
+    
+    def get(self, v_id, default = None) -> torch.tensor:
+        return self.vector_store.get(v_id, default)
 
     def get_vector(self, v_id: str) -> torch.tensor:
         return self.vector_store.get_vector(v_id)
@@ -416,20 +353,13 @@ class VectorDatabase(object):
     
     def get_vector_description(self, v_id: str) -> str:
         return self.vector_store.describe_vector_string(v_id=v_id)
-    
-    def get_vector_description_dict(self, v_id: str) -> dict:
-        return self.vector_store.describe_vector_dict(v_id=v_id)
 
-    def _parse_file(self, filename: str, runtime: bool = False) -> pd.DataFrame:
-        start_time: float = time.time()
+    def _parse_file(self, filename: str) -> pd.DataFrame:
         assert os.path.isfile(filename), f"{filename} not found."
-        set_data = pd.read_json(filename)['data'][2:]
-        if runtime: 
-            print("PARSING DATASET: " + str(time.time() - start_time))
-        return set_data
+        data = pd.read_json(filename)['data'][2:]
+        return data
 
-    def _AWS_DATA_REQUEST(self, filename: str, runtime: bool = False) -> pd.DataFrame:
-        start_time: float = time.time()
+    def _AWS_DATA_REQUEST(self, filename: str) -> pd.DataFrame:
         AWS_S3_BUCKET: str = 'allcarddata'
         REGION_NAME: str = 'us-east-1'
 
@@ -446,9 +376,6 @@ class VectorDatabase(object):
         response = s3_client.get_object(Bucket=AWS_S3_BUCKET, Key=filename)
         status: int = response.get("ResponseMetadata", {}).get("HTTPStatusCode")
         assert status == 200, "Invalid Request"
-
-        if runtime: 
-            print("AWS DATA REQUEST: " + str(time.time() - start_time))
         return pd.read_json(response.get("Body"))['data'][2:]
     
     def save(self, filename: str) -> None:
@@ -459,8 +386,8 @@ class VectorDatabase(object):
 
 
 if __name__ == "__main__":
-    vd = VectorDatabase(True)
-    vd.parse_json(filename="AllPrintings.json")
+    vd = VectorDatabase(CardEncoder(), CardDecoder())
+    vd.parse_json(filename="datasets/AllPrintings.json", max_lines=2500)
     random_vector = vd.get_random_vector()
 
     print(random_vector)
@@ -469,10 +396,9 @@ if __name__ == "__main__":
 
     print()
     similar_vectors = vd.get_similar_vectors(random_vector[1])
-    print(vd.get_vector_description_dict(similar_vectors[1][0]))
 
     print(vd.find_id("Horus"))
     print(vd.find_id("Magnus"))
     print(vd.find_vector_pair("Abaddon"))
 
-    vd.save("vector_data.pt")
+    # vd.save("vector_data.pt")

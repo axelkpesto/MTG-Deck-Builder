@@ -1,9 +1,9 @@
 from flask import Flask, request, jsonify
-from VECTOR_DATABASE import VectorDatabase
+from Vector_Database import VectorDatabase
 
 app = Flask(__name__)
 vd = VectorDatabase()
-vd.parse_json("AllPrintings.json",runtime=True,max_lines=2500)
+vd.parse_json("datasets/AllPrintings.json",runtime=True,max_lines=2500)
 
 #Example Request:
 #(Invoke-RestMethod -Uri "http://127.0.0.1:5000/get_vector/Shunt")

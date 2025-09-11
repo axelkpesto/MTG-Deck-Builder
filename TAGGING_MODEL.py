@@ -1,27 +1,27 @@
 import json
-from typing import List, Sequence
-
 import numpy as np
 import pandas as pd
 import torch
 import torch.nn as nn
+import argparse
+import os
 from torch.utils.data import Dataset, DataLoader
 
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import MultiLabelBinarizer
 from sklearn.metrics import accuracy_score, f1_score, precision_score, recall_score, classification_report
-from VECTOR_DATABASE import VectorDatabase
+from Vector_Database import VectorDatabase
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 def build_dataset() -> pd.DataFrame:
     vd = VectorDatabase()
-    vd.load("vector_data.pt")
+    vd.load("datasets/vector_data.pt")
     
-    with open("CommanderCards.json", "r", encoding="utf-8") as f:
+    with open("datasets/CommanderCards.json", "r", encoding="utf-8") as f:
         data = json.load(f)
 
-    card_lookup = {card["card_name"]: card.get("tags", []) for card in data}
+    card_lookup = {card['card_name']: card.get("tags", []) for card in data}
 
     rows = []
     for name, vec in vd.items():
@@ -37,11 +37,11 @@ def build_dataset() -> pd.DataFrame:
 
 
 def prepare_xy(df: pd.DataFrame, test_size: float = 0.2, random_state: int = 42):
-    X = df["vector"]
-    y: List[List[str]] = df["tags"].apply(lambda t: t if isinstance(t, list) else []).tolist()
-    names = df["name"].tolist()
+    X = df['vector']
+    y: list[list[str]] = df['tags'].apply(lambda t: t if isinstance(t, list) else []).tolist()
+    names = df['name'].tolist()
 
-    X_train_s, X_test_s, y_train_raw, y_test_raw, names_train, names_test = train_test_split(
+    X_train_s, X_test_s, y_train_raw, y_test_raw, _, names_test = train_test_split(
         X, y, names, test_size=test_size, random_state=random_state, shuffle=True
     )
 
@@ -121,7 +121,7 @@ def train_torch(model: nn.Module, train_loader: DataLoader, val_loader: DataLoad
         print(f"Epoch {epoch:02d} | train_loss={train_loss:.4f} | val_loss={val_loss:.4f}")
 
 @torch.no_grad()
-def evaluate_torch(model: nn.Module, X_test: np.ndarray, y_test: np.ndarray, class_names: Sequence[str], threshold: float = 0.5, batch_size: int = 2048):
+def evaluate_torch(model: nn.Module, X_test: np.ndarray, y_test: np.ndarray, class_names: list[str], threshold: float = 0.5, batch_size: int = 2048):
     model.eval()
     model.to(device)
 
@@ -152,7 +152,8 @@ def evaluate_torch(model: nn.Module, X_test: np.ndarray, y_test: np.ndarray, cla
     print(classification_report(y_test, y_pred, target_names=list(class_names), zero_division=0))
 
 @torch.no_grad()
-def print_example_predictions(model: nn.Module, X_test: np.ndarray, y_test: np.ndarray, test_names: List[str], class_names: List[str], k: int = 8, threshold: float = 0.5):
+def print_example_predictions(model: nn.Module, X_test: np.ndarray, y_test: np.ndarray, test_names: list[str], class_names: list[str], k: int = 8, threshold: float = 0.5):
+    if k <= 0: return
     model.eval()
     model.to(device)
 
@@ -182,26 +183,73 @@ def print_example_predictions(model: nn.Module, X_test: np.ndarray, y_test: np.n
         print(f"  Predicted (@{threshold:.2f}): {pred_tags}")
         print(f"  Outliers: {[class_names[j] for j in outliers]}")
 
+def save_model(model: nn.Module, mlb: MultiLabelBinarizer, path: str, model_kwargs: dict):
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    payload = {
+        "state_dict": model.state_dict(),
+        "class_names": list(mlb.classes_),
+        "model_kwargs": model_kwargs,
+    }
+    torch.save(payload, path)
+    print(f"[saved] {path}")
+
+@torch.no_grad()
+def load_model(path: str) -> tuple[nn.Module, list[str]]:
+    payload = torch.load(path, map_location=device)
+    kw = payload['model_kwargs']
+    model = MLP(**kw).eval()
+    model.load_state_dict(payload['state_dict'])
+    return model, payload['class_names']
 
 def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--load", action="store_true", default=False, help="If set, load the trained model.")
+    parser.add_argument("--load_path", type=str, default="models/tagging_mlp.pt")
+
+    parser.add_argument("--epochs", type=int, default=20)
+    parser.add_argument("--batch_size", type=int, default=256)
+    parser.add_argument("--lr", type=float, default=1e-3)
+    parser.add_argument("--hidden", type=int, default=128)
+
+    parser.add_argument("--threshold", type=float, default=0.5, help="Probability threshold for predicting a tag.")
+    parser.add_argument("--show_n", type=int, default=8, help="How many test examples to print.")
+
+    parser.add_argument("--save", action="store_true", default=True, help="If set, save the trained model.")
+    parser.add_argument("--save_path", type=str, default="models/tagging_mlp.pt")
+    parser.add_argument("--amp", action="store_true", default=True, help="Use mixed precision on CUDA.")
+    parser.add_argument("--no-amp", dest="amp", action="store_false")
+    parser.add_argument("--seed", type=int, default=42)
+
+    args = parser.parse_args()
+
     df = build_dataset()
-    df = df.sample(frac=1, random_state=42).reset_index(drop=True)
+    df = df.sample(frac=1, random_state=(args.seed)).reset_index(drop=True)
 
-    X_train, X_test, y_train, y_test, mlb, names_test = prepare_xy(df, test_size=0.2, random_state=42)
-    threshold = 0.3
-    train_ds = VectorsDataset(X_train, y_train)
-    test_ds = VectorsDataset(X_test, y_test)
+    X_train, X_test, y_train, y_test, mlb, names_test = prepare_xy(df, test_size=0.2, random_state=args.seed)
 
-    train_loader = DataLoader(train_ds, batch_size=256, shuffle=True, num_workers=0, pin_memory=(device.type == "cuda"))
-    val_loader = DataLoader(test_ds, batch_size=256, shuffle=False, num_workers=0, pin_memory=(device.type == "cuda"))
+    if args.load:
+        model, _ = load_model(args.load_path)
+    else:
 
-    model = MLP(input_dim=X_train.shape[1], output_dim=y_train.shape[1], hidden=128)
+        train_ds = VectorsDataset(X_train, y_train)
+        test_ds = VectorsDataset(X_test, y_test)
+        model = MLP(input_dim=X_train.shape[1], output_dim=y_train.shape[1], hidden=args.hidden).to(device)
 
-    train_torch(model, train_loader=train_loader, val_loader=val_loader, epochs=20, lr=1e-3, use_amp=True)
+        train_loader = DataLoader(train_ds, batch_size=args.batch_size, shuffle=True, num_workers=0, pin_memory=(device.type == 'cuda'))
+        val_loader = DataLoader(test_ds, batch_size=args.batch_size, shuffle=False, num_workers=0, pin_memory=(device.type == 'cuda'))
+        train_torch(model, train_loader=train_loader, val_loader=val_loader, epochs=args.epochs, lr=args.lr, use_amp=args.amp)
 
-    evaluate_torch(model, X_test=X_test, y_test=y_test, class_names=mlb.classes_, threshold=threshold)
+    evaluate_torch(model, X_test=X_test, y_test=y_test, class_names=mlb.classes_, threshold=args.threshold)
     
-    print_example_predictions(model, X_test=X_test, y_test=y_test, test_names=names_test, class_names=list(mlb.classes_), k=8, threshold=threshold,)
+    print_example_predictions(model, X_test=X_test, y_test=y_test, test_names=names_test, class_names=list(mlb.classes_), k=args.show_n, threshold=args.threshold)
     
+    if args.save:
+        model_kwargs = {
+            "input_dim": X_train.shape[1],
+            "output_dim": y_train.shape[1],
+            "hidden": args.hidden,
+        }
+        save_model(model, mlb, path=args.save_path, model_kwargs=model_kwargs)
+
 if __name__ == "__main__":
     main()
