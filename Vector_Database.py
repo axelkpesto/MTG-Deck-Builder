@@ -226,10 +226,19 @@ class VectorStore(object):
         return {v_id: str(self.get_vector(v_id=v_id))}
     
     def save(self, filename: str) -> None:
-        torch.save(self.vector_data, filename)
+        cpu_dict = {k: v.detach().cpu() for k, v in self.vector_data.items()}
+        torch.save(cpu_dict, filename)
 
     def load(self, filename: str) -> None:
-        self.vector_data = torch.load(filename, map_location=self.device)
+        try:
+            self.vector_data = torch.load(filename, map_location=self.device, weights_only=True)
+        except Exception:
+            self.vector_data = torch.load(filename, map_location=self.device, weights_only=False)
+        
+        for k, v in list(self.vector_data.items()):
+            if not isinstance(v, torch.Tensor):
+                v = torch.tensor(v)
+            self.vector_data[k] = v.to(self.device)
 
 class VectorDatabase(object):
     def __init__(self, encoder, decoder) -> None:

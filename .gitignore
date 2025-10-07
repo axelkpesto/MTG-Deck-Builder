@@ -8,6 +8,6 @@ __pycache__
 *.json
 .python-version
 requirements.txt
-models/
 .vscode/
 venv/
+.env
