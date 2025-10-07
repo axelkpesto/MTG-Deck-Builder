@@ -9,8 +9,10 @@ app = Flask(__name__)
 load_dotenv()
 CORS(app)
 app.config["DEBUG"] = os.environ.get("FLASK_DEBUG")
+
 vd = VectorDatabase(CardEncoder(), CardDecoder())
 vd.load("datasets/vector_data.pt")
+
 
 @app.route('/', methods=['GET'])
 def home():
