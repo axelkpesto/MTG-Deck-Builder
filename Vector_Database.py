@@ -230,11 +230,8 @@ class VectorStore(object):
         torch.save(cpu_dict, filename)
 
     def load(self, filename: str) -> None:
-        try:
-            self.vector_data = torch.load(filename, map_location=self.device, weights_only=False)
-        except Exception:
-            self.vector_data = torch.load(filename, map_location=self.device, weights_only=True)
-        
+        self.vector_data = torch.load(filename, map_location=self.device, weights_only=False)
+
         for k, v in list(self.vector_data.items()):
             if not isinstance(v, torch.Tensor):
                 v = torch.tensor(v)
