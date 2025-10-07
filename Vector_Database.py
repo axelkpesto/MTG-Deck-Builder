@@ -412,7 +412,6 @@ if __name__ == "__main__":
     print()
     print(vd.get_vector_description(random_vector[0]))
 
-    print()
     similar_vectors = vd.get_similar_vectors(random_vector[1])
 
     print(vd.find_id("Horus"))
