@@ -38,6 +38,7 @@ class DataSet(object):
                 if 'commander' in card['legalities'] and card['legalities']['commander']=="Legal" and 'paper' in card['availability']:
                     cd = CardFields.parse_mtgjson_card(card)
                     attributes = cd.get_attributes()
+                    attributes['tags'] = CardFields.tag_card(cd)
                     for attribute, value in attributes.items():
                         if attribute not in card_data:
                             card_data[attribute] = [value]

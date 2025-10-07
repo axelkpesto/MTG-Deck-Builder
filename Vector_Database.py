@@ -209,6 +209,22 @@ class VectorStore(object):
             return self.decoder.decode(v_id, self.get_vector(v_id=v_id))
         return f"{v_id}: {self.get_vector(v_id=v_id)}"
 
+    def describe_vector_dict(self, v_id: str) -> dict[str, str]:
+        """
+        Dictionary representation of given vector
+
+        Parameters:
+            v_id: str
+                ID of Vector
+        
+        Output:
+            dict[str, str]
+                Dictionary representation of vector
+        """
+        if self.decoder:
+            return self.decoder.decode_to_dict(v_id, self.get_vector(v_id=v_id))
+        return {v_id: str(self.get_vector(v_id=v_id))}
+    
     def save(self, filename: str) -> None:
         torch.save(self.vector_data, filename)
 
@@ -354,6 +370,9 @@ class VectorDatabase(object):
     def get_vector_description(self, v_id: str) -> str:
         return self.vector_store.describe_vector_string(v_id=v_id)
 
+    def get_vector_description_dict(self, v_id: str) -> dict[str, str]:
+        return self.vector_store.describe_vector_dict(v_id=v_id)
+
     def _parse_file(self, filename: str) -> pd.DataFrame:
         assert os.path.isfile(filename), f"{filename} not found."
         data = pd.read_json(filename)['data'][2:]
@@ -384,10 +403,9 @@ class VectorDatabase(object):
     def load(self, filename: str) -> None:
         self.vector_store.load(filename)
 
-
 if __name__ == "__main__":
     vd = VectorDatabase(CardEncoder(), CardDecoder())
-    vd.parse_json(filename="datasets/AllPrintings.json", max_lines=2500)
+    vd.parse_json(filename="datasets/AllPrintings.json")
     random_vector = vd.get_random_vector()
 
     print(random_vector)
@@ -401,4 +419,4 @@ if __name__ == "__main__":
     print(vd.find_id("Magnus"))
     print(vd.find_vector_pair("Abaddon"))
 
-    # vd.save("vector_data.pt")
+    vd.save("datasets/vector_data.pt")

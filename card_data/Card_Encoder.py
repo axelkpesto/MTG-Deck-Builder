@@ -1,6 +1,6 @@
 from sentence_transformers import SentenceTransformer
-from Card import Card
-from Card_Fields import CardFields
+from card_data.Card import Card
+from card_data.Card_Fields import CardFields
 import numpy as np
 
 class CardEncoder(object):

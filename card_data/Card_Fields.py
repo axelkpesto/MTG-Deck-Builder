@@ -1,4 +1,4 @@
-from Card import Card
+from card_data.Card import Card
 import re
 
 class CardFields(object):

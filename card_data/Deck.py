@@ -1,5 +1,5 @@
-from Card import Card
-from Card_Encoder import CardEncoder
+from card_data.Card import Card
+from card_data.Card_Encoder import CardEncoder
 import torch
 import json
 

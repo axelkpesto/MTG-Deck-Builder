@@ -40,6 +40,7 @@ class Card(object):
         return: dictionary of string:attribute
         """
         return {
+            'commander_legal':self.commander_legal,
             'card_name':self.card_name,
             'card_types':self.card_types,
             'card_supertypes':self.card_supertypes,
@@ -68,5 +69,5 @@ class Card(object):
 
 
 if __name__ == "__main__":
-    from MTG_DATABASE import DataSet
+    from MTG_Database import DataSet
     ds = DataSet()

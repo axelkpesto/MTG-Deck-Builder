@@ -11,11 +11,12 @@ from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import MultiLabelBinarizer
 from sklearn.metrics import accuracy_score, f1_score, precision_score, recall_score, classification_report
 from Vector_Database import VectorDatabase
+from Card_Lib import CardEncoder, CardDecoder
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 def build_dataset() -> pd.DataFrame:
-    vd = VectorDatabase()
+    vd = VectorDatabase(CardEncoder(), CardDecoder())
     vd.load("datasets/vector_data.pt")
     
     with open("datasets/CommanderCards.json", "r", encoding="utf-8") as f:

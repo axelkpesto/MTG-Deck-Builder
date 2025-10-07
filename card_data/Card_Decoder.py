@@ -1,5 +1,5 @@
 
-from Card_Fields import CardFields
+from card_data.Card_Fields import CardFields
 import numpy as np
 
 class CardDecoder(object):
@@ -8,7 +8,6 @@ class CardDecoder(object):
         self.card_supertypes = CardFields.card_supertypes()
         self.all_subtypes = CardFields.card_subtypes()
         self.color_identities = CardFields.color_identities()
-        self.tags = CardFields.card_tags()
         self.embed_dim = embed_dim
 
     def decode(self, card_name: str, encoded_vector: np.ndarray) -> str:
@@ -35,19 +34,15 @@ class CardDecoder(object):
 
         rarity = self.int_to_rarity(int(encoded_vector[idx]))
         idx += 1
-        
-        if self.embed_dim:
-            text_embed = encoded_vector[idx:idx + self.embed_dim]
 
         return {
             "Name": card_name.capitalize(),
-            "Types": str(card_types).capitalize(),
-            "Supertypes": str(supertypes).capitalize(),
-            "Subtypes": str(subtypes).capitalize(),
+            "Types": str([x.capitalize() for x in card_types]),
+            "Supertypes": str([x.capitalize() for x in supertypes]),
+            "Subtypes": str([x.capitalize() for x in subtypes]),
             "Mana Cost": str(mana_cost),
-            "Color Identity": str(color_identity),
+            "Color Identity": str([x.capitalize() for x in color_identity]),
             "Rarity": str(rarity).capitalize(),
-            "Text Embedding (truncated)": str(text_embed[:5]) + "..."
         }
 
     def int_to_rarity(self, rarity_int: int) -> str:
