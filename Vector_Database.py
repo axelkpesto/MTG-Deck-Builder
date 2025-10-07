@@ -230,6 +230,7 @@ class VectorStore(object):
         torch.save(cpu_dict, filename)
 
     def load(self, filename: str) -> None:
+        self.clear()
         self.vector_data = torch.load(filename, map_location=self.device, weights_only=False)
 
         for k, v in list(self.vector_data.items()):

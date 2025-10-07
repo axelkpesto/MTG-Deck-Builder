@@ -11,7 +11,7 @@ CORS(app)
 app.config["DEBUG"] = os.environ.get("FLASK_DEBUG")
 
 vd = VectorDatabase(CardEncoder(), CardDecoder())
-vd.parse_json("datasets/AllCards.json", max_lines=1000)
+vd.load("datasets/vector_data.pt")
 
 @app.route('/', methods=['GET'])
 def home():
