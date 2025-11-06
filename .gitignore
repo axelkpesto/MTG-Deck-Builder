@@ -10,3 +10,4 @@ requirements.txt
 .vscode/
 venv/
 .env
+.mypy_cache/

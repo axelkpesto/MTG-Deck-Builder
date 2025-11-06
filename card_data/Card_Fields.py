@@ -1,5 +1,7 @@
 from card_data.Card import Card
 import re
+from typing import Dict, Callable
+import numpy as np
 
 class CardFields(object):
     __tags_general = {
@@ -51,7 +53,6 @@ class CardFields(object):
     }
     __tags_joint = {tag: [[p.lower() for p in pair] for pair in pairs] for tag, pairs in __tags_joint.items()}
 
-
     __tags_regex = {
         'aggro': [r'attack each turn', r'deal \d+ damage'],
         'combo': [r'cast for {0}'],
@@ -95,6 +96,7 @@ class CardFields(object):
     __spell_subtypes = [t.lower() for t in['Adventure', 'Arcane', 'Chorus', 'Lesson', 'Trap']]
     __all_subtypes = __creature_subtypes + __artifact_subtypes + __battle_subtypes + __enchantment_subtypes + __land_subtypes + __spell_subtypes
     __color_identities = ['W', 'G', 'U', 'B', 'R', 'C']
+    __rarities = ['common', 'uncommon', 'rare', 'mythic', 'timeshifted', 'masterpiece', 'special']
     
     __tags_general_sets = {k: set(v) for k, v in __tags_general.items()}
     __tags_joint_sets   = {k: [set(pair) for pair in v] for k, v in __tags_joint.items()}
@@ -112,6 +114,17 @@ class CardFields(object):
 
     __all_tags = set(__tags_general.keys()).union(set(__tags_joint.keys())).union(set(__tags_regex.keys())).union(set(__subtype_tags.keys()))
 
+    __BASIC_LANDS = {"Plains","Island","Swamp","Mountain","Forest","Wastes"}
+
+    __COLOR_BASIC_LAND_MAP = {
+        'W': 'Plains',
+        'U': 'Island',
+        'B': 'Swamp',
+        'R': 'Mountain',
+        'G': 'Forest',
+        'C': 'Wastes'
+    }
+
     @staticmethod
     def card_types() -> list[str]: return sorted(CardFields.__card_types)
 
@@ -128,16 +141,16 @@ class CardFields(object):
     def card_tags() -> list[str]: return sorted(CardFields.__tags_general.keys())
     
     @staticmethod
-    def general_tags() -> dict[str, list[str]]: return CardFields.__tags_general
+    def general_tags() -> Dict[str, list[str]]: return CardFields.__tags_general
 
     @staticmethod
-    def joint_tags() -> dict[str, list[list[str]]]: return CardFields.__tags_joint
+    def joint_tags() -> Dict[str, list[list[str]]]: return CardFields.__tags_joint
 
     @staticmethod
-    def regex_tags() -> dict[str, list[str]]: return CardFields.__tags_regex
+    def regex_tags() -> Dict[str, list[str]]: return CardFields.__tags_regex
     
     @staticmethod
-    def subtype_tags() -> dict[str, list[str]]: return CardFields.__subtype_tags
+    def subtype_tags() -> Dict[str, list[str]]: return CardFields.__subtype_tags
     
     @staticmethod
     def card_types_set() -> set[str]: return CardFields.__card_types_set
@@ -167,19 +180,55 @@ class CardFields(object):
     def color_identities_set() -> set[str]: return CardFields.__color_identities_set
 
     @staticmethod
-    def tags_general_sets() -> dict[str, set[str]]: return CardFields.__tags_general_sets
+    def tags_general_sets() -> Dict[str, set[str]]: return CardFields.__tags_general_sets
 
     @staticmethod
-    def tags_joint_sets() -> dict[str, list[set[str]]]: return CardFields.__tags_joint_sets
+    def tags_joint_sets() -> Dict[str, list[set[str]]]: return CardFields.__tags_joint_sets
 
     @staticmethod
-    def tags_regex_sets() -> dict[str, set[str]]: return CardFields.__tags_regex_sets
+    def tags_regex_sets() -> Dict[str, set[str]]: return CardFields.__tags_regex_sets
 
     @staticmethod
-    def tags_subtype_sets() -> dict[str, set[str]]: return CardFields.__tags_subtype_sets
+    def tags_subtype_sets() -> Dict[str, set[str]]: return CardFields.__tags_subtype_sets
+
+    @staticmethod
+    def rarities() -> list[str]: return sorted(CardFields.__rarities)
+
+    @staticmethod
+    def basic_lands() -> set[str]: return CardFields.__BASIC_LANDS
+
+    @staticmethod
+    def color_basic_land_map() -> Dict[str, str]: return CardFields.__COLOR_BASIC_LAND_MAP
+
+    @staticmethod
+    def rarity_map() -> Dict[int, str]: return dict({(i+1, CardFields.__rarities[i]) for i in range(len(CardFields.__rarities))})
+
+    @staticmethod
+    def rarity_to_index() -> Dict[str, int]: return dict({(CardFields.__rarities[i], i+1) for i in range(len(CardFields.__rarities))})
 
     @staticmethod
     def all_tags() -> set[str]: return CardFields.__all_tags
+
+    @staticmethod
+    def pred_dim(dim: int) -> Callable[[str, np.ndarray], bool]:
+        return lambda _, v: v.shape[-1] == dim
+
+    @staticmethod
+    def pred_regex(pattern: str, flags: int = re.IGNORECASE) -> Callable[[str, np.ndarray], bool]:
+        rx = re.compile(pattern, flags)
+        return lambda n, _: rx.search(n) is not None
+
+    @staticmethod
+    def pred_not(inner: Callable[[str, np.ndarray], bool]) -> Callable[[str, np.ndarray], bool]:
+        return lambda n, v: not inner(n, v)
+
+    @staticmethod
+    def pred_all(*preds: Callable[[str, np.ndarray], bool]) -> Callable[[str, np.ndarray], bool]:
+        return lambda n, v: all(p(n, v) for p in preds)
+
+    @staticmethod
+    def pred_any(*preds: Callable[[str, np.ndarray], bool]) -> Callable[[str, np.ndarray], bool]:
+        return lambda n, v: any(p(n, v) for p in preds)
 
     @staticmethod
     def tag_text(name: str, text: str) -> set[str]:
@@ -222,13 +271,13 @@ class CardFields(object):
     @staticmethod
     def parse_mtgjson_card(card: dict) -> Card:
         card_kwargs = {
-            'commander_legal': 'commander' in card['legalities'] and card['legalities']['commander']=="legal",
+            'commander_legal': 'commander' in card['legalities'] and card['legalities']['commander']=="Legal",
             'card_name': card.get('name', ''),
             'card_types': [str(s).lower() for s in card.get('types', '')],
             'card_supertypes': [str(s).lower() for s in card.get('supertypes', '')],
             'card_subtypes': [str(s).lower() for s in card.get('subtypes', '')],
             'mana_cost': card.get('manaValue', -1),
-            'mana_cost_exp': card.get('manCost', ''),
+            'mana_cost_exp': card.get('manaCost', ''),
             'color_identity': [str(x).upper() for x in sorted([x for x in list(set(card.get('manaCost', ''))) if str(x).isalpha()])],
             'defense': card.get('defense', ''),
             'rarity': card.get('rarity', ''),
@@ -246,7 +295,7 @@ class CardFields(object):
         split = card.get('type_line', 'None').split(' — ')
         subsplit = [item.lower() for sublist in [s.split(' ') for s in split] for item in sublist]
         card_kwargs = {
-            'commander_legal': 'commander' in card['legalities'] and card['legalities']['commander']=="legal",
+            'commander_legal': 'commander' in card['legalities'] and card['legalities']['commander']=="Legal",
             'card_name': card.get('name', ''),
             'card_types': [s for s in subsplit if s in CardFields.card_types()],
             'card_supertypes': [s for s in subsplit if s in CardFields.card_supertypes()],

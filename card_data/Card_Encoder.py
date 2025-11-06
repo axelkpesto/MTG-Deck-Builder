@@ -2,9 +2,10 @@ from sentence_transformers import SentenceTransformer
 from card_data.Card import Card
 from card_data.Card_Fields import CardFields
 import numpy as np
+from typing import Optional, Tuple
 
 class CardEncoder(object):
-    def __init__(self, embed_model_name: str | None ="all-MiniLM-L6-v2"):
+    def __init__(self, embed_model_name: Optional[str] ="all-MiniLM-L6-v2"):
         self.embed_model_name = embed_model_name
         self.card_types = CardFields.card_types()
         self.card_supertypes = CardFields.card_supertypes()
@@ -14,7 +15,7 @@ class CardEncoder(object):
         if embed_model_name:
             self.embed_model = SentenceTransformer(embed_model_name)
 
-    def encode(self, crd: Card) -> tuple[str, np.ndarray]:
+    def encode(self, crd: Card) -> Tuple[str, np.ndarray]:
         ret = []
 
         # Type encodings
@@ -51,7 +52,7 @@ class CardEncoder(object):
         ret += cd
 
         # Rarity
-        ret += [self.rarity_to_int(crd.card_name, crd.rarity)]
+        ret += [self.rarity_to_int(crd.rarity)]
 
         # Text embedding
         if self.embed_model_name:
@@ -60,15 +61,5 @@ class CardEncoder(object):
 
         return (crd.card_name, np.array(ret, dtype=np.float32))
 
-    def rarity_to_int(self, name: str, rarity: str) -> int:
-        match rarity:
-            case 'common': return 1
-            case 'uncommon': return 2
-            case 'rare': return 3
-            case 'mythic': return 4
-            case 'timeshifted': return 5
-            case 'masterpiece': return 6
-            case 'special': return 7
-            case _: 
-                print("NAME: " + name + "RARITY?: " + str(rarity))
-                raise Exception('Rarity not found')
+    def rarity_to_int(self, rarity: str) -> int:
+        return CardFields.rarity_to_index().get(rarity, Exception("Rarity Not Found"))

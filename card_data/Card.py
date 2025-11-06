@@ -2,7 +2,7 @@ import json
 
 class Card(object):
     def __init__(self, commander_legal: bool, card_name: str, card_types: list[str], card_supertypes: str, card_subtypes: list[str], mana_cost: int, mana_cost_exp: str, color_identity: list[str], defense: str, rarity: str, text: str, rank: str, power: str, toughness: str, loyalty: str, id: str) -> None:
-        self.commander_legal: bool = commander_legal #Is the Card Legal in Commander? True if property exists and is legal, False otherwise.
+        self.commander_legal: bool = bool(commander_legal) #Is the Card Legal in Commander? True if property exists and is legal, False otherwise.
         self.card_name: str = card_name #Name of the Card. None if property doesn't exist.
         self.card_types: list[str] =  card_types #Card Types (EX: CREATURE) of the Card. None if property doesn't exist.
         self.card_supertypes: str = card_supertypes #Supertypes (EX: LEGENDARY) of the Card. None if property doesn't exist.
@@ -33,6 +33,10 @@ class Card(object):
     def __len__(self) -> int:
         return 1
     
+    def tags(self) -> list[str]:
+        from card_data.Card_Fields import CardFields
+        return CardFields.tag_card(self)
+
     def get_attributes(self) -> dict:
         """
         get_attributes maps the name of attributes to the value of the attribute.
@@ -56,7 +60,7 @@ class Card(object):
             'toughness':self.toughness,
             'loyalty':self.loyalty,
             'id':self.id,
-            # 'tags':CardFields.tag_card(self),
+            # 'tags':self.tags(),
         }
 
     def to_json(self) -> str:

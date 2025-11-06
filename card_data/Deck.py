@@ -1,22 +1,22 @@
 from card_data.Card import Card
-from card_data.Card_Encoder import CardEncoder
+from card_data.Card_Fields import CardFields
 import torch
 import json
+from typing import List, Tuple, Dict
 
 class Deck(object):
-    def __init__(self, id: str, colors: list[str], color_percentages: dict[str, float], bracket: int, format: str, commanders: list[Card], companions: list[Card], mainboard_count: int, cards: list[tuple[Card, int]]) -> None:
+    def __init__(self, id: str, colors: List[str], color_percentages: Dict[str, float], bracket: int, format: str, commanders: List[Card], companions: List[Card], mainboard_count: int, cards: List[Tuple[Card, int]]) -> None:
         self.id: str = id
-        self.colors: list[str] = colors
-        self.color_percentages: dict[str, float] = color_percentages
+        self.colors: List[str] = colors
+        self.color_percentages: Dict[str, float] = color_percentages
         self.bracket: int = bracket
         self.mainboard_count: int = mainboard_count
-        self.cards: list[tuple[Card, int]] = cards
-        self.cards_expanded: list[Card] = [card for card, count in self.cards for _ in range(count)]
-        self.format: str  = format
-        self.commanders: list[Card] = commanders
-        self.companions: list[Card] = companions
+        self.cards: List[Tuple[Card, int]] = cards
+        self.cards_expanded: List[Card] = [card for card, count in self.cards for _ in range(count)]
+        self.format: str = format
+        self.commanders: List[Card] = commanders
+        self.companions: List[Card] = companions
         self.all_cards = self.commanders + self.companions + self.cards_expanded
-        self.encoder = CardEncoder()
 
     def __eq__(self, value: object) -> bool:
         if isinstance(value, Deck):
@@ -29,7 +29,7 @@ class Deck(object):
     def __len__(self) -> int:
         return sum([qty for _, qty in self.cards])+len(self.commanders)+len(self.companions)
     
-    def get_attributes(self) -> dict:
+    def get_attributes(self) -> Dict:
         return {
             'id': self.id,
             'colors': self.colors,
@@ -47,3 +47,53 @@ class Deck(object):
     
     def to_tensor(self) -> torch.tensor:
         return torch.stack([torch.tensor(self.encoder.encode(x)[1], dtype=torch.float32) for x in self.all_cards])
+
+class SimpleDeck(object):
+    def __init__(self, id: str, commanders: List[str], cards: List[str]) -> None:
+        self.id: str = id
+        self.commanders: List[str] = commanders
+        self.cards: List[str] = cards
+
+    def __str__(self) -> str:
+        return f"id: {self.id}\ncommanders: {self.commanders}\ncards: {self.cards}\n"
+    
+    def get_attributes(self) -> Dict:
+        return {
+            'id': self.id,
+            'commanders': self.commanders,
+            'cards': self.cards,
+        }
+    
+    def to_json(self) -> str:
+        return json.dumps(self.get_attributes(), indent=4)
+    
+    def from_json(obj: Dict) -> 'SimpleDeck':
+        return SimpleDeck(id=str(obj["id"]), commanders=list(obj["commanders"]), cards=list(obj.get("cards", [])))
+
+    @staticmethod
+    def load_json_file(path: str) -> List["SimpleDeck"]:
+        with open(path, "r", encoding="utf-8") as f:
+            raw = json.load(f)
+        items = raw.values() if isinstance(raw, dict) else raw
+        return [SimpleDeck.from_json(x) for x in items]
+    
+    def __len__(self) -> int:
+        return len(self.cards) + len(self.commanders)
+    
+    def __eq__(self, value: object) -> bool:
+        if isinstance(value, SimpleDeck):
+            return self.cards == value.cards and self.commanders == value.commanders
+        return False
+    
+    def shape_deck(self, commander_colors: List[str]) -> None:
+        if len(self.cards) >= 99:
+            self.cards = self.cards[:99]
+            return
+        basics = SimpleDeck.basic_lands_from_colors(commander_colors)
+        need = 99 - len(self.cards)
+        self.cards += (basics * ((need // len(basics)) + 1))[:need]
+
+    @staticmethod
+    def basic_lands_from_colors(colors: List[str]) -> List[str]:
+        return [CardFields.color_basic_land_map()[color] for color in colors if color in CardFields.color_basic_land_map()]
+

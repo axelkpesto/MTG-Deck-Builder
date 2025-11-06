@@ -1,20 +1,42 @@
-
 from card_data.Card_Fields import CardFields
 import numpy as np
+import torch
+from typing import Dict, List, Optional
 
 class CardDecoder(object):
-    def __init__(self, embed_dim: int | None = 384):
+    def __init__(self, embed_dim: Optional[int] = 686):
         self.card_types = CardFields.card_types()
         self.card_supertypes = CardFields.card_supertypes()
         self.all_subtypes = CardFields.card_subtypes()
         self.color_identities = CardFields.color_identities()
+        self.rarities = CardFields.rarities()
         self.embed_dim = embed_dim
+
+        self.field_map = {
+            "types": self.card_types,
+            "supertypes": self.card_supertypes,
+            "subtypes": self.all_subtypes,
+            "mana": self.color_identities,
+            "colors": self.color_identities,
+            "rarity": self.rarities
+        }
+
+        self.slice_map = {
+            "types": (0, len(self.card_types)),
+            "supertypes": (len(self.card_types), len(self.card_types) + len(self.card_supertypes)),
+            "subtypes": (len(self.card_types) + len(self.card_supertypes), len(self.card_types) + len(self.card_supertypes) + len(self.all_subtypes)),
+            "mana": (len(self.card_types) + len(self.card_supertypes) + len(self.all_subtypes), len(self.card_types) + len(self.card_supertypes) + len(self.all_subtypes) + 1),
+            "colors": (len(self.card_types) + len(self.card_supertypes) + len(self.all_subtypes) + 1, len(self.card_types) + len(self.card_supertypes) + len(self.all_subtypes) + 1 + len(self.color_identities)),
+            "rarity": (len(self.card_types) + len(self.card_supertypes) + len(self.all_subtypes) + 1 + len(self.color_identities), len(self.card_types) + len(self.card_supertypes) + len(self.all_subtypes) + 1 + len(self.color_identities) + 1),
+            "embed": ("tail", embed_dim),
+            "head_len": len(self.card_types) + len(self.card_supertypes) + len(self.all_subtypes) + 1 + len(self.color_identities) + 1
+        }
 
     def decode(self, card_name: str, encoded_vector: np.ndarray) -> str:
         d = self.decode_to_dict(card_name, encoded_vector)
         return "\n".join([f"{k}: {v}" for k, v in d.items()])
 
-    def decode_to_dict(self, card_name: str, encoded_vector: np.ndarray) -> dict[str, str]:
+    def decode_to_dict(self, card_name: str, encoded_vector: np.ndarray) -> Dict[str, str]:
         idx = 0
 
         card_types = [self.card_types[i] for i, v in enumerate(encoded_vector[idx:idx + len(self.card_types)]) if v == 1]
@@ -46,12 +68,16 @@ class CardDecoder(object):
         }
 
     def int_to_rarity(self, rarity_int: int) -> str:
-        return {
-            1: 'Common',
-            2: 'Uncommon',
-            3: 'Rare',
-            4: 'Mythic',
-            5: 'Timeshifted',
-            6: 'Masterpiece',
-            7: 'Special'
-        }.get(rarity_int, 'Unknown')
+        return CardFields.rarity_map().get(rarity_int, 'Unknown')
+    
+    def slice(self, key: str, dim: int) -> slice:
+        if key == "embed":
+            return slice(dim - self.embed_dim, dim)
+        a, b = self.slice_map[key]
+        return slice(a, b)
+
+    def item_from_vector(self, vec: torch.Tensor, value: str, threshold: float = 0.5) -> List[str]:
+        vec = np.asarray(vec)
+        s = self.slice(value, vec.shape[-1])
+        hot = vec[s] > threshold
+        return [c for c, on in zip(self.field_map[value], hot) if on]
