@@ -1,6 +1,7 @@
 from card_data.Card_Fields import CardFields
 import numpy as np
 import torch
+import torch.nn.functional as F
 from typing import Dict, List, Optional
 
 class CardDecoder(object):
@@ -81,3 +82,40 @@ class CardDecoder(object):
         s = self.slice(value, vec.shape[-1])
         hot = vec[s] > threshold
         return [c for c, on in zip(self.field_map[value], hot) if on]
+    
+    def constrain_logits(self, X: torch.Tensor, threshold: float = 0.5) -> torch.Tensor:
+        dim = X.size(-1)
+        s_types       = self.slice("types", dim)
+        s_supertypes  = self.slice("supertypes", dim)
+        s_subtypes    = self.slice("subtypes", dim)
+        s_mana        = self.slice("mana", dim)
+        s_colors      = self.slice("colors", dim)
+        s_rarity      = self.slice("rarity", dim)
+        s_embed       = self.slice("embed", dim)
+
+        types      = (torch.sigmoid(X[..., s_types])      >= threshold).to(X.dtype)
+        supertypes = (torch.sigmoid(X[..., s_supertypes]) >= threshold).to(X.dtype)
+        subtypes   = (torch.sigmoid(X[..., s_subtypes])   >= threshold).to(X.dtype)
+        colors     = (torch.sigmoid(X[..., s_colors])     >= threshold).to(X.dtype)
+
+        mana = torch.round(X[..., s_mana])
+        mana = torch.clamp(mana, 0, 16)
+
+        rarity = torch.round(X[..., s_rarity])
+        rarity = torch.clamp(rarity, 1, len(self.rarities) + 1)
+
+        embed = F.normalize(X[..., s_embed], dim=-1)
+
+        Y = torch.cat(
+            [
+                types,
+                supertypes,
+                subtypes,
+                mana,
+                colors,
+                rarity,
+                embed,
+            ],
+            dim=-1,
+        )
+        return Y

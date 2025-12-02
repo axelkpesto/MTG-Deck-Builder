@@ -45,9 +45,21 @@ class Deck(object):
     def to_json(self) -> str:
         return json.dumps(self.get_attributes(), indent=4)
     
-    def to_tensor(self) -> torch.tensor:
-        return torch.stack([torch.tensor(self.encoder.encode(x)[1], dtype=torch.float32) for x in self.all_cards])
+    def to_tensor(self, encoder) -> torch.Tensor:
+        return torch.stack([torch.tensor(encoder.encode(x)[1], dtype=torch.float32) for x in self.all_cards])
+    
+    def shape_deck(self, commander_colors: List[str]) -> None:
+        if len(self.cards) >= 99:
+            self.cards = self.cards[:99]
+            return
+        basics = Deck.basic_lands_from_colors(commander_colors)
+        need = 99 - len(self.cards)
+        self.cards += (basics * ((need // len(basics)) + 1))[:need]
 
+    @staticmethod
+    def basic_lands_from_colors(colors: List[str]) -> List[str]:
+        return [CardFields.color_basic_land_map()[color] for color in colors if color in CardFields.color_basic_land_map()]
+    
 class SimpleDeck(object):
     def __init__(self, id: str, commanders: List[str], cards: List[str]) -> None:
         self.id: str = id
@@ -67,6 +79,7 @@ class SimpleDeck(object):
     def to_json(self) -> str:
         return json.dumps(self.get_attributes(), indent=4)
     
+    @staticmethod
     def from_json(obj: Dict) -> 'SimpleDeck':
         return SimpleDeck(id=str(obj["id"]), commanders=list(obj["commanders"]), cards=list(obj.get("cards", [])))
 

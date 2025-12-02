@@ -1,38 +1,21 @@
 from Card_Lib import CardFields
-import os, re
+import os
+import re
 import pandas as pd
-import boto3
+from typing import List, Dict, Any
+
 
 class DataSet(object):
-    def __init__(self):
-        self.SET_DATAFRAME = self.JSON_DATA_SETUP("datasets/AllPrintings.json")
-        self.card_set = self.PARSE_SET_DATA()
+    def __init__(self) -> None:
+        self.SET_DATAFRAME: pd.Series = self.JSON_DATA_SETUP("datasets/AllPrintings.json")
+        self.card_set: pd.DataFrame = self.PARSE_SET_DATA()
 
-    def AWS_DATA_REQUEST(self, file: str) -> pd.DataFrame:
-        AWS_S3_BUCKET: str = 'allcarddata'
-        REGION_NAME: str = 'us-east-1'
-
-        AWS_ACCESS_KEY_ID: str = str(os.getenv("AWS_ACCESS_KEY_ID"))
-        AWS_SECRET_ACCESS_KEY: str = str(os.getenv("AWS_SECRET_ACCESS_KEY"))
-
-        s3_client = boto3.client(
-            "s3",
-            aws_access_key_id=AWS_ACCESS_KEY_ID,
-            aws_secret_access_key=AWS_SECRET_ACCESS_KEY,
-            region_name=REGION_NAME
-        )
-
-        response = s3_client.get_object(Bucket=AWS_S3_BUCKET, Key=file)
-        status = response.get("ResponseMetadata", {}).get("HTTPStatusCode")
-        assert(status==200)
-        return pd.read_json(response.get("Body"))['data'][2:]
-
-    def JSON_DATA_SETUP(self, filename: str):
+    def JSON_DATA_SETUP(self, filename: str) -> pd.Series:
         assert os.path.isfile(filename), f"{filename} not found."
         return pd.read_json(filename)['data'][2:]
 
     def PARSE_SET_DATA(self) -> pd.DataFrame:
-        card_data: dict = dict()
+        card_data: Dict[str, List[Any]] = dict()
         for game_set in self.SET_DATAFRAME:
             for card in game_set['cards']:
                 if 'commander' in card['legalities'] and card['legalities']['commander']=="Legal" and 'paper' in card['availability']:
@@ -50,24 +33,24 @@ class DataSet(object):
     def NAME_QUERY(self, name: str) -> pd.DataFrame:
         return self.card_set[self.card_set['card_name'].str.contains(name)]
 
-    def RANK_QUERY(self, rank: int):
+    def RANK_QUERY(self, rank: int) -> pd.DataFrame:
         return self.card_set[self.card_set['rank']==rank]
 
-    def QUERY(self, queries:list[str]):
+    def QUERY(self, queries: List[str]) -> pd.DataFrame:
         for query in queries:
             self.card_set = self.card_set.query(query)
         return self.card_set
 
     def WRITE_DATA_CSV(self, filename: str) -> None:
         self.card_set.to_csv(filename, index=False)
-    
+
     def WRITE_DATA_JSON(self, filename: str) -> None:
         self.card_set.to_json(filename, orient="records", indent=4)
-    
-    def GET_CARD_SET(self): 
+
+    def GET_CARD_SET(self) -> pd.DataFrame:
         return self.card_set
 
-    def format_output(self, txt: str):
+    def format_output(self, txt: str) -> str:
         return re.sub(r'[\n]', '. ', re.sub(r',\[\]\(\)"\'', '', str(txt)))
 
 if __name__ == "__main__":

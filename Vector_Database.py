@@ -4,7 +4,7 @@ import pandas as pd
 import os
 import random
 from Card_Lib import CardEncoder, CardDecoder, CardFields
-from typing import Callable, Iterator, Optional, Tuple, List, Dict
+from typing import Callable, Iterator, Optional, Tuple, List, Dict, Any
 
 class VectorStore(object):
     def __init__(self, encoder, decoder) -> None:
@@ -24,8 +24,8 @@ class VectorStore(object):
     def __len__(self) -> int:
         return len(self.vector_data.keys())
 
-    def __iter__(self) -> bool:
-        return (x for x in self.vector_data.items())
+    def __iter__(self) -> Iterator[Tuple[str, torch.Tensor]]:
+        return iter(self.vector_data.items())
     
     def __getitem__(self, key) -> torch.Tensor:
         if isinstance(key, str):
@@ -45,13 +45,13 @@ class VectorStore(object):
             torch.cuda.empty_cache()
 
     def items(self) -> List[Tuple[str, np.array]]:
-        return self.vector_data.items()
+        return list(self.vector_data.items())
     
     def keys(self) -> List[str]:
-        return self.vector_data.keys()
+        return list(self.vector_data.keys())
     
     def values(self) -> List[np.array]:
-        return self.vector_data.values()
+        return list(self.vector_data.values())
 
     def setdefault(self, v_id: str, vector: np.array) -> None:
         return self.vector_data.setdefault(v_id, vector)
@@ -67,30 +67,30 @@ class VectorStore(object):
     def add_vector(self, v_id: str, vector: np.ndarray) -> None:
         if self.contains(v_id):
             return
-        vector_tensor = torch.tensor(vector, dtype=torch.float32).to(self.device)
+        vector_tensor = torch.Tensor(vector, dtype=torch.float32).to(self.device)
         self.vector_data[v_id] = vector_tensor
 
-    def get(self, v_id: str, default):
+    def get(self, v_id: str, default: Any) -> torch.Tensor:
         return self.vector_data[v_id] if v_id in self.vector_data else default
-    
-    def get_list(self, v_ids: List[str], default) -> List[torch.tensor]:
+
+    def get_list(self, v_ids: List[str], default: Any) -> List[torch.Tensor]:
         return [self.get(v_id, default) for v_id in v_ids]
 
     def get_vector(self, v_id: str) -> np.ndarray:
         return self.vector_data[v_id].cpu().numpy()
 
-    def get_vector_tup(self, v_id: str) -> Tuple[str, torch.tensor]:
+    def get_vector_tup(self, v_id: str) -> Tuple[str, torch.Tensor]:
         return (v_id, self.get_vector(v_id))
 
-    def get_random_vector(self) -> Tuple[str, torch.tensor]:
+    def get_random_vector(self) -> Tuple[str, torch.Tensor]:
         random_id: str = random.choice(list(self.vector_data.keys()))
         return (random_id, self.get_vector(v_id=random_id))
 
     def size(self) -> int:
         return len(self.vector_data.keys())
 
-    def get_similar_vectors(self, q_vector: torch.tensor, n_results: int = 5) -> List[Tuple[str, torch.tensor]]:
-        q_vector_tensor = torch.tensor(q_vector, dtype=torch.float32).to(self.device)
+    def get_similar_vectors(self, q_vector: torch.Tensor, n_results: int = 5) -> List[Tuple[str, torch.Tensor]]:
+        q_vector_tensor = torch.Tensor(q_vector, dtype=torch.float32).to(self.device)
 
         results = []
         for vector_id, vector in self.vector_data.items():
@@ -128,7 +128,7 @@ class VectorStore(object):
             out.append(idx)
         return out
 
-    def find_vector_pair(self, q_id: str) -> Tuple[str, torch.tensor]:
+    def find_vector_pair(self, q_id: str) -> Tuple[str, torch.Tensor]:
         if q_id in self.vector_data:
             return self.get_vector_tup(q_id)
         else:
@@ -137,7 +137,7 @@ class VectorStore(object):
                     return self.get_vector_tup(id)
             raise KeyError(f"KeyError: {q_id}")
 
-    def find_vector(self, q_id: str) -> torch.tensor:
+    def find_vector(self, q_id: str) -> torch.Tensor:
         return self.find_vector_pair(q_id)[1]
 
     def find_id(self, q_id: str) -> str:
@@ -163,7 +163,7 @@ class VectorStore(object):
 
         for k, v in list(self.vector_data.items()):
             if not isinstance(v, torch.Tensor):
-                v = torch.tensor(v)
+                v = torch.Tensor(v)
             self.vector_data[k] = v.to(self.device)
 
     def filter_iterator(self, predicate: Callable[[str, np.ndarray], bool], *, limit: Optional[int] = None) -> Iterator[Tuple[str, np.ndarray]]:
@@ -261,31 +261,31 @@ class VectorDatabase(object):
     def add_vector(self, v_id: str, vector: np.ndarray) -> None:
         self.vector_store.add_vector(v_id, vector)
     
-    def get(self, v_id, default = None) -> torch.tensor:
+    def get(self, v_id: str, default: Any = None) -> torch.Tensor:
         return self.vector_store.get(v_id, default)
 
-    def get_list(self, v_ids: List[str], default = None) -> List[torch.tensor]:
+    def get_list(self, v_ids: List[str], default: Any = None) -> List[torch.Tensor]:
         return self.vector_store.get_list(v_ids, default)
 
-    def get_vector(self, v_id: str) -> torch.tensor:
+    def get_vector(self, v_id: str) -> torch.Tensor:
         return self.vector_store.get_vector(v_id)
     
-    def get_vector_tup(self, v_id: str) -> Tuple[str, torch.tensor]:
+    def get_vector_tup(self, v_id: str) -> Tuple[str, torch.Tensor]:
         return self.vector_store.get_vector_tup(v_id)
     
-    def get_random_vector(self) -> Tuple[str, torch.tensor]:
+    def get_random_vector(self) -> Tuple[str, torch.Tensor]:
         return self.vector_store.get_random_vector()
     
-    def get_similar_vectors(self, q_vector: torch.tensor, n_results: int = 5) -> List[Tuple[str, torch.tensor]]:
+    def get_similar_vectors(self, q_vector: torch.Tensor, n_results: int = 5) -> List[Tuple[str, torch.Tensor]]:
         return self.vector_store.get_similar_vectors(q_vector, n_results)
     
-    def nearest_by_embedding(self, queries: np.ndarray, candidates: np.ndarray, slice: int, topk: int = 8) -> List[np.ndarray]:
-        return self.vector_store.nearest_by_embedding(queries, candidates, slice, topk)
+    def nearest_by_embedding(self, queries: np.ndarray, candidates: np.ndarray, slice_index: int, topk: int = 8) -> List[np.ndarray]:
+        return self.vector_store.nearest_by_embedding(queries, candidates, slice_index, topk)
 
-    def find_vector_pair(self, v_id: str) -> Tuple[str, torch.tensor]:
+    def find_vector_pair(self, v_id: str) -> Tuple[str, torch.Tensor]:
         return self.vector_store.find_vector_pair(v_id)
     
-    def find_vector(self, v_id: str) -> torch.tensor:
+    def find_vector(self, v_id: str) -> torch.Tensor:
         return self.vector_store.find_vector(v_id)
 
     def find_id(self, v_id: str) -> str:
@@ -310,6 +310,9 @@ class VectorDatabase(object):
     def filter(self, predicate: Callable[[str, np.ndarray], bool], *, limit: Optional[int] = None, names_only: bool = False, vectors_only: bool = False) -> List:
         return self.vector_store.filter(predicate, limit=limit, names_only=names_only, vectors_only=vectors_only)
 
+    def to_ndarray(self, *, predicate: Optional[Callable[[str, np.ndarray], bool]] = None) -> np.ndarray:
+        return self.vector_store.to_ndarray(predicate=predicate)
+    
 if __name__ == "__main__":
     vd = VectorDatabase(CardEncoder(), CardDecoder())
     vd.parse_json(filename="datasets/AllPrintings.json")

@@ -1,11 +1,12 @@
 from mtgsdk import Card
 from openai import OpenAI
 import os
+from typing import List
 
-client = OpenAI(api_key = os.environ.get("OPENAI_API_KEY"))
-MODEL = "gpt-3.5-turbo"
-INITIAL_MESSAGE = ""
-CONTEXT = [
+client: OpenAI = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
+MODEL: str = "gpt-3.5-turbo"
+INITIAL_MESSAGE: str = ""
+CONTEXT: List[str] = [
 """
 You are a program that helps build magic the gathering commander decks. When building decks, you follow rules of deckbuilding exactly as specified. 
 """,
@@ -28,13 +29,13 @@ These following rules are extremely important and must be followed exactly. The 
 """
 When building the deck, follow the rules exactly.
 """]
-BUILDER_MESSAGE = """
+BUILDER_MESSAGE: str = """
 Make a Commander Deck using {name}. Gear the deck to work with {name} abilities, and mana cost. The deck must have a suitable amount of lands, cards that fit the {type}s color identity, {color}, and must be fairly competitive. Make sure to include some basic lands, while still keeping the sum total of lands at 18.
 The deck should have 18 total lands, and a sum total of 100 cards. If you use fetch lands, the lands must only fetch for lands that are the color identity of the {type}.
 """
-PLANESWALKER_COMMANDER_CONDITION = ("Can be your Commander").lower()
+PLANESWALKER_COMMANDER_CONDITION: str = ("Can be your Commander").lower()
 
-def chat_with_chatgpt(prompt=""):
+def chat_with_chatgpt(prompt: str = "") -> str:
     prompt = f"You: {prompt}\nBot:"
 
     response = client.chat.completions.create(
@@ -50,24 +51,24 @@ def chat_with_chatgpt(prompt=""):
         ],
         temperature=0.1
     )
-    
-    bot_response = response.choices[0].message.content
+
+    bot_response: str = response.choices[0].message.content
     return bot_response
 
-def get_cards(card_name):
-    card_set = []
-    card_array_creatures = Card.where(name=card_name).where(type="creature").where(supertypes="legendary").where(legality="commander").all()
-    card_array_planeswalkers = Card.where(name=card_name).where(type="planeswalker").where(supertypes="legendary").where(legality="commander").all()
+def get_cards(card_name: str) -> List[str]:
+    card_set: List[str] = []
+    card_array_creatures: List[Card] = Card.where(name=card_name).where(type="creature").where(supertypes="legendary").where(legality="commander").all()
+    card_array_planeswalkers: List[Card] = Card.where(name=card_name).where(type="planeswalker").where(supertypes="legendary").where(legality="commander").all()
 
     for individual_card in card_array_creatures:
         if individual_card.name not in card_set:
             card_set.append(individual_card.name)
-    
+
     for individual_card in card_array_planeswalkers:
         if(PLANESWALKER_COMMANDER_CONDITION in individual_card.text.lower()):
             if individual_card.name not in card_set:
                 card_set.append(individual_card.name)
-    
+
     return card_set
 
 while(True):

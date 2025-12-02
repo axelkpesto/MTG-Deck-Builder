@@ -62,4 +62,7 @@ class CardEncoder(object):
         return (crd.card_name, np.array(ret, dtype=np.float32))
 
     def rarity_to_int(self, rarity: str) -> int:
-        return CardFields.rarity_to_index().get(rarity, Exception("Rarity Not Found"))
+        try:
+            return CardFields.rarity_to_index()[rarity]
+        except KeyError as e:
+            raise ValueError(f"Unknown rarity: {rarity!r}") from e
