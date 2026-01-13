@@ -29,11 +29,11 @@ class VectorStore(object):
     
     def __getitem__(self, key) -> torch.Tensor:
         if isinstance(key, str):
-            return self.vector_data.get(key)
+            return self.vector_data[key]
         elif isinstance(key, int):
             values = list(self.vector_data.keys())
             if 0 <= key < len(values):
-                return values[key]
+                return self.vector_data[values[key]]
             else:
                 raise IndexError("Index out of range")
         else:
@@ -64,10 +64,16 @@ class VectorStore(object):
             return np.array([v.cpu().numpy() for k, v in self.vector_data.items() if predicate(k, v)])
         return np.array([v.cpu().numpy() for v in self.vector_data.values()])
     
+    def to_dataframe(self, *, predicate: Optional[Callable[[str, np.ndarray], bool]] = None) -> pd.DataFrame:
+        if predicate:
+            return pd.DataFrame(dict((k, v.cpu().numpy()) for k, v in self.vector_data.items() if predicate(k, v)))
+        return pd.DataFrame(dict((k, v.cpu().numpy()) for k, v in self.vector_data.items()))
+
     def add_vector(self, v_id: str, vector: np.ndarray) -> None:
+        assert(isinstance(v_id, str))
         if self.contains(v_id):
             return
-        vector_tensor = torch.Tensor(vector, dtype=torch.float32).to(self.device)
+        vector_tensor = torch.from_numpy(vector).float().to(self.device)
         self.vector_data[v_id] = vector_tensor
 
     def get(self, v_id: str, default: Any) -> torch.Tensor:
@@ -90,7 +96,7 @@ class VectorStore(object):
         return len(self.vector_data.keys())
 
     def get_similar_vectors(self, q_vector: torch.Tensor, n_results: int = 5) -> List[Tuple[str, torch.Tensor]]:
-        q_vector_tensor = torch.Tensor(q_vector, dtype=torch.float32).to(self.device)
+        q_vector_tensor = torch.tensor(q_vector, dtype=torch.float32).to(self.device)
 
         results = []
         for vector_id, vector in self.vector_data.items():
@@ -163,7 +169,7 @@ class VectorStore(object):
 
         for k, v in list(self.vector_data.items()):
             if not isinstance(v, torch.Tensor):
-                v = torch.Tensor(v)
+                v = torch.tensor(v)
             self.vector_data[k] = v.to(self.device)
 
     def filter_iterator(self, predicate: Callable[[str, np.ndarray], bool], *, limit: Optional[int] = None) -> Iterator[Tuple[str, np.ndarray]]:
@@ -213,7 +219,7 @@ class VectorDatabase(object):
             return self.vector_store[key]
         elif isinstance(key, int):
             if 0 <= key < len(self.vector_store):
-                self.vector_store[key]
+                return self.vector_store[key]
             else:
                 raise IndexError("Index out of range")
         else:
@@ -239,6 +245,9 @@ class VectorDatabase(object):
 
     def to_ndarray(self, *, predicate: Optional[Callable[[str, np.ndarray], bool]] = None) -> np.ndarray:
         return self.vector_store.to_ndarray(predicate=predicate)
+    
+    def to_dataframe(self, *, predicate: Optional[Callable[[str, np.ndarray], bool]] = None) -> pd.DataFrame:
+        return self.vector_store.to_dataframe(predicate=predicate)
 
     def parse_json(self, filename: str, max_lines: int = -1) -> VectorStore:
         set_data: pd.DataFrame = self._parse_file(filename)['data'][2:]
@@ -246,6 +255,10 @@ class VectorDatabase(object):
         
         for game_set in set_data:
             for card in game_set['cards']:
+                print(card['legalities'])
+                print(card['availability'])
+                print('commander' in card['legalities'])
+                print(card['legalities']['commander'])
                 if 'commander' in card['legalities'] and card['legalities']['commander'] == "Legal" and 'paper' in card['availability']:
                     v_id, vector = self.encoder.encode(CardFields.parse_mtgjson_card(card))
                     self.vector_store.add_vector(v_id, vector)
@@ -261,6 +274,12 @@ class VectorDatabase(object):
     def add_vector(self, v_id: str, vector: np.ndarray) -> None:
         self.vector_store.add_vector(v_id, vector)
     
+    def get_encoder(self):
+        return self.encoder
+
+    def get_decoder(self):
+        return self.decoder
+
     def get(self, v_id: str, default: Any = None) -> torch.Tensor:
         return self.vector_store.get(v_id, default)
 
@@ -307,6 +326,12 @@ class VectorDatabase(object):
     def load(self, filename: str) -> None:
         self.vector_store.load(filename)
 
+    @staticmethod
+    def load_static(filename: str, encoder = None, decoder = None) -> "VectorDatabase":
+        vd = VectorDatabase(encoder, decoder)
+        vd.load(filename)
+        return vd
+
     def filter(self, predicate: Callable[[str, np.ndarray], bool], *, limit: Optional[int] = None, names_only: bool = False, vectors_only: bool = False) -> List:
         return self.vector_store.filter(predicate, limit=limit, names_only=names_only, vectors_only=vectors_only)
 
@@ -328,4 +353,4 @@ if __name__ == "__main__":
     print(vd.find_id("Magnus"))
     print(vd.find_vector_pair("Abaddon"))
 
-    vd.save("datasets/vector_data.pt")
+    # vd.save("datasets/vector_data.pt")

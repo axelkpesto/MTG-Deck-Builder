@@ -132,7 +132,7 @@ def get_tags(v_id):
     else:
         vec_np = np.asarray(vector, dtype=np.float32)
 
-    return jsonify(_predict_from_vector(vec_np, threshold, top_k))
+    return jsonify(predict_from_vector(vec_np, threshold, top_k))
 
 @app.route('/get_tags_from_vector', methods=['POST'])
 def get_tags_from_vector():
@@ -147,7 +147,7 @@ def get_tags_from_vector():
     except (TypeError, ValueError):
         return jsonify({"error": "Invalid vector/threshold/top_k types"}), 400
 
-    return jsonify(_predict_from_vector(vec_np, threshold, top_k))
+    return jsonify(predict_from_vector(vec_np, threshold, top_k))
 
 def format_id(v_id: str) -> str:
     transition_words = {'of', 'the', 'in', 'on', 'at', 'to', 'for', 'and', 'but', 'or', 'nor'}
@@ -162,7 +162,7 @@ def format_id(v_id: str) -> str:
     return ' '.join(capitalized_words)
 
 @torch.inference_mode()
-def _predict_from_vector(vec_np: np.ndarray, threshold: float, top_k: int = 8):
+def predict_from_vector(vec_np: np.ndarray, threshold: float, top_k: int = 8):
     x = torch.from_numpy(vec_np.astype(np.float32)).unsqueeze(0).to(device)
     logits = model(x)
     probs = torch.sigmoid(logits).float().cpu().numpy()[0]
