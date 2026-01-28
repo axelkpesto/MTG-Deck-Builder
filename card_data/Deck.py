@@ -78,6 +78,15 @@ class SimpleDeck(object):
     
     def to_json(self) -> str:
         return json.dumps(self.get_attributes(), indent=4)
+
+    def to_tensor_stack(self, vd) -> torch.Tensor:
+        vecs = []
+        for name in (self.commanders + self.cards):
+            try:
+                vecs.append(vd.find_vector(vd.find_id(name)).float())
+            except Exception:
+                continue
+        return torch.stack(vecs, dim=0)
     
     @staticmethod
     def from_json(obj: Dict) -> 'SimpleDeck':
@@ -109,4 +118,3 @@ class SimpleDeck(object):
     @staticmethod
     def basic_lands_from_colors(colors: List[str]) -> List[str]:
         return [CardFields.color_basic_land_map()[color] for color in colors if color in CardFields.color_basic_land_map()]
-

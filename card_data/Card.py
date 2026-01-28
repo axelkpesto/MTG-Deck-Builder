@@ -70,8 +70,3 @@ class Card(object):
         return: A JSON string representing the Card object.
         """
         return json.dumps(self.get_attributes(), indent=4)
-
-
-if __name__ == "__main__":
-    from MTG_Database import DataSet
-    ds = DataSet()

@@ -22,8 +22,10 @@ def build_dataset() -> pd.DataFrame:
     with open("datasets/CommanderCards.json", "r", encoding="utf-8") as f:
         data = json.load(f)
 
+    print(len(data))
     card_lookup = {card['card_name']: card.get("tags", []) for card in data}
-
+    print(f"Loaded {len(card_lookup)} cards with tags.") #Issue here is its only grabbing a certain amount of cards?
+    
     rows = []
     for name, vec in vd.items():
         if hasattr(vec, "detach"):
@@ -34,17 +36,15 @@ def build_dataset() -> pd.DataFrame:
         rows.append({"name": name, "vector": vec, "tags": card_lookup.get(name, [])})
     
     print(f"Built dataset with {len(rows)}")
+    print(f"Keys: {list(rows[0]['tags']) if len(rows) > 0 else 'N/A'}")
     return pd.DataFrame(rows)
-
 
 def prepare_xy(df: pd.DataFrame, test_size: float = 0.2, random_state: int = 42):
     X = df['vector']
     y: list[list[str]] = df['tags'].apply(lambda t: t if isinstance(t, list) else []).tolist()
     names = df['name'].tolist()
 
-    X_train_s, X_test_s, y_train_raw, y_test_raw, _, names_test = train_test_split(
-        X, y, names, test_size=test_size, random_state=random_state, shuffle=True
-    )
+    X_train_s, X_test_s, y_train_raw, y_test_raw, _, names_test = train_test_split(X, y, names, test_size=test_size, random_state=random_state, shuffle=True)
 
     X_train = np.stack(X_train_s.values).astype(np.float32)
     X_test  = np.stack(X_test_s.values).astype(np.float32)
@@ -70,13 +70,7 @@ class VectorsDataset(Dataset):
 class MLP(nn.Module):
     def __init__(self, input_dim: int, output_dim: int, hidden: int = 128):
         super().__init__()
-        self.net = nn.Sequential(
-            nn.Linear(input_dim, hidden),
-            nn.ReLU(),
-            nn.Linear(hidden, hidden),
-            nn.ReLU(),
-            nn.Linear(hidden, output_dim),
-        )
+        self.net = nn.Sequential(nn.Linear(input_dim, hidden), nn.ReLU(), nn.Linear(hidden, hidden), nn.ReLU(), nn.Linear(hidden, output_dim))
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         return self.net(x)
@@ -212,7 +206,7 @@ def main():
     parser.add_argument("--lr", type=float, default=1e-3)
     parser.add_argument("--hidden", type=int, default=128)
 
-    parser.add_argument("--threshold", type=float, default=0.5, help="Probability threshold for predicting a tag.")
+    parser.add_argument("--threshold", type=float, default=0.45, help="Probability threshold for predicting a tag.")
     parser.add_argument("--show_n", type=int, default=8, help="How many test examples to print.")
 
     parser.add_argument("--save", action="store_true", default=True, help="If set, save the trained model.")

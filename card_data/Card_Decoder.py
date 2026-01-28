@@ -106,16 +106,5 @@ class CardDecoder(object):
 
         embed = F.normalize(X[..., s_embed], dim=-1)
 
-        Y = torch.cat(
-            [
-                types,
-                supertypes,
-                subtypes,
-                mana,
-                colors,
-                rarity,
-                embed,
-            ],
-            dim=-1,
-        )
+        Y = torch.cat([types, supertypes, subtypes, mana, colors, rarity, embed], dim=-1)
         return Y

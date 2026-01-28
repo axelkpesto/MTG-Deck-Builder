@@ -5,65 +5,209 @@ import numpy as np
 
 class CardFields(object):
     __tags_general = {
-        'aggro': ['haste', 'attack each turn', 'additional combat'],
-        'control': ['destroy target', 'exile target', 'return target', 'tap target', 'prevent all damage', 'flash', 'scry', 'can\'t activate', 'can\'t attack', 'can\'t block', 'countered', 'return each', 'destroy that', 'gain control', 'tap all', 'change the target', 'return all'],
-        'combo': ['You win the game', 'Opponent loses the game', 'for each', 'without paying it\'s mana cost', 'storm', 'cast for {0}', 'The legend rule doesn\'t apply', 'without paying its mana cost', 'rather than paying its mana value', 'rather than paying it\'s mana value', 'rather than paying its mana cost', 'rather than paying it\'s mana cost'],
-        'ramp': ['add mana', 'search your library for a land', 'landfall', 'treasure', 'search your library for a basic land', 'basic lands', 'basic land'],
-        'card_draw': ['draw a card', 'blood token', 'you may play that card this turn'],
-        'party': ['Cleric', 'Rogue', 'Warrior', 'Wizard', 'party'],
-        'token': ['token', 'populate', 'copy', 'token creature', 'tokens you control', 'creature token'],
-        'life_gain': ['gain life', 'whenever you gain life', 'life total', 'lifelink', 'food token', 'you gain that much life'],
-        'life_drain':['lose life', 'loses that much life', 'paying life', 'pays life', 'pay life'],
-        'mill': ['put into your graveyard', 'mill', 'from the top of their library', 'library into graveyard'],
-        'discard': ['discard a card', 'discard cards', 'each player discards', 'from their hand', 'discard', 'madness', 'blood'],
-        'reanimaton': ['return target creature card', 'graveyard to the battlefield', 'reanimate', 'bring back', 'from your graveyard', 'regenerate'],
-        'burn': ['damage to any target', 'damage to each opponent', 'damage to target creature', 'damage to target planeswalker', 'damage to any target', 'deals damage equal to'],
-        'enchantment': ['enchant', 'aura', 'whenever you cast an enchantment', 'constellation', 'saga'],
+        'aggro': ['haste', 'attack each turn', 'must attack', 'additional combat', 'extra combat', 'whenever you attack', 'whenever this creature attacks', 'combat phase', 'double strike', 'first strike', 'menace', 'trample', 'can\'t be blocked', 'deals combat damage', 'after this phase', 'until end of combat'],
+        'control': ['counter target', 'counterspell', 'countered', 'destroy target', 'destroy all', 'exile target', 'exile all', 'return target', 'return all', 'return each', 'to its owner\'s hand', 'tap target', 'tap all', 'doesn\'t untap', 'can\'t untap', 'gain control', 'change the target', 'prevent all damage', 'prevent that damage', 'can\'t activate', 'can\'t cast', 'can\'t attack', 'can\'t block', 'flash', 'scry'],
+        'combo': ['you win the game', 'opponent loses the game', 'without paying its mana cost', 'without paying it\'s mana cost', 'rather than paying its mana cost', 'rather than paying it\'s mana cost', 'rather than paying its mana value', 'rather than paying it\'s mana value', 'the legend rule doesn\'t apply', 'storm', 'cast for {0}', 'repeat this process', 'infinite'],
+        'ramp': ['add mana', 'add {', 'mana pool', 'untap target land', 'search your library for a land', 'search your library for a basic land', 'put it onto the battlefield', 'put that card onto the battlefield', 'play an additional land', 'you may play an additional land', 'treasure token', 'create a treasure', 'landfall'],
+        'card_draw': ['draw a card', 'draw cards', 'draw two cards', 'draw three cards', 'investigate', 'clue token', 'you may play that card this turn', 'until end of your next turn', 'exile the top card', 'you may cast that card', 'look at the top', 'put it into your hand', 'whenever you draw'],
+        'token': ['token', 'tokens you control', 'token creature', 'creature token', 'create a', 'create x', 'populate', 'amass', 'copy', 'create that many'],
+        'life_gain': ['gain life', 'whenever you gain life', 'you gain that much life', 'lifelink', 'life total', 'food token'],
+        'life_drain': ['lose life', 'loses that much life', 'each opponent loses', 'pay life', 'pays life', 'paying life'],
+        'mill': ['mill', 'puts the top', 'from the top of their library', 'put into your graveyard', 'library into graveyard', 'surveil'],
+        'discard': ['discard a card', 'discard cards', 'each player discards', 'randomly discards', 'from their hand', 'madness', 'blood'],
+        'reanimation': ['reanimate', 'return target creature card', 'return target', 'from your graveyard to the battlefield', 'graveyard to the battlefield', 'put target creature card from your graveyard onto the battlefield', 'bring back', 'unearth'],
+        'burn': ['damage to any target', 'damage to each opponent', 'damage to target creature', 'damage to target planeswalker', 'deals damage equal to', 'whenever you cast a spell'],
+        'enchantment': ['enchant', 'aura', 'constellation', 'saga', 'whenever you cast an enchantment'],
         'equipment': ['equip', 'attach', 'whenever equipped', 'whenever you attach', 'when equipped'],
-        'artifact': ['artifact', 'whenever you cast an artifact', 'metalcraft'],
-        'planeswalker': ['planeswalker', 'loyalty', 'loyalty counter', 'proliforate'],
-        'tribal': ['Elf', 'Goblin', 'Zombie', 'Vampire', 'Warrior', 'Merfolk', 'Soldier', 'Dragon', 'Angel', 'Wizard', 'Knight', 'Sliver'],
-        'voltron': ['equip', 'attach', 'whenever equipped', 'whenever you attach', 'aura'],
-        'stax': ['tap target', 'opponent can\'t untap', 'opponents can\'t draw', 'whenever an opponent', 'can\'t cast', 'can\'t activate', 'can\'t attack', 'prevent that damage', 'prevent damage', 'deals damage to you'],
-        'storm': ['storm', 'copy this spell', 'copy that spell', 'copy target spell', 'magecraft', 'copy target instant', 'copy target sorcery', 'copy'],
-        'graveyard': ['graveyard', 'return from your graveyard', 'mill', 'from your graveyard', 'unearth'],
-        'sacrifice': ['sacrifice a creature', 'sacrifice a permanent', 'whenever you sacrifice', 'sacrifice'],
-        'combat': ['combat damage to a player', 'combat damage to an opponent', 'vigilance', 'combat damage', 'attacks', 'first strike', 'double strike', 'target attacking', 'target blocking', 'whenever you attack', 'whenever  attacks', 'whenever  blocks', 'each combat', 'blocks', 'attacking', 'blocking', 'can\'t be blocked', 'deals damage to a player', 'flying', 'raid', 'infect', 'poison counter', 'proliferate', 'with infect', 'flanking', 'horemanship', 'menace', 'deathtouch', 'reach', 'trample'],
-        'outlaw': ['Assassin', 'Mercenary', 'Pirate', 'Rogue', 'Warlock'],
-        'removal':['Destroy target', 'Destroy all', 'Exile target', 'Exile all', 'Remove from the game', 'Removed from the game', 'Destroy'],
-        'buff':['all tokens you control', 'all creatures you control', 'proliferate', 'creatures you control get', 'token creatures you control get'],
-        'etb':['enters the battlefield', 'enters under your control', 'enter the battlefield', 'exile and return', 'flicker', 'blink', 're-enter the battlefield'],
-        'library_control':['scry', 'on top of your library', 'card into your hand', 'on the top of your library', 'look at the top'],
-        'extb':['whenever a creature dies', 'whenever another creature dies', 'whenever a creature is put into your graveyard', 'whenever this creature dies', 'when  dies', 'regenerate', 'would die', 'dies', 'put into a graveyard', ],
-        'protection':['indestructible', 'prevent all damage', 'protection from', 'shroud', 'hexproof', 'you have hexproof', 'you have shroud', 'creatures you control gain indestructible', 'creatures you control gain hexproof', 'creatures you control gain shroud', 'target creature you control gains hexproof']
+        'artifact': ['artifact', 'metalcraft', 'improvise', 'affinity for artifacts', 'whenever you cast an artifact'],
+        'planeswalker': ['planeswalker', 'loyalty', 'loyalty counter', 'proliferate'],
+        'tribal': ['elf', 'goblin', 'zombie', 'vampire', 'warrior', 'merfolk', 'soldier', 'dragon', 'angel', 'wizard', 'knight', 'sliver'],
+        'voltron': ['equip', 'attach', 'aura', 'background', 'whenever equipped'],
+        'combat': ['combat damage', 'attacks', 'blocks', 'attacking', 'blocking', 'target attacking', 'target blocking', 'each combat', 'vigilance', 'first strike', 'double strike', 'flying', 'menace', 'deathtouch', 'reach', 'trample', 'infect', 'poison counter', 'proliferate', 'with infect', 'flanking', 'horsemanship'],
+        'stax': ['players can\'t', 'opponents can\'t', 'can\'t cast', 'can\'t activate', 'opponent can\'t untap', 'doesn\'t untap', 'skip your untap step', 'opponents can\'t draw', 'can\'t search libraries', 'spells cost', 'costs {', 'enters the battlefield tapped'],
+        'storm': ['storm', 'copy this spell', 'copy that spell', 'copy target spell', 'copy target instant', 'copy target sorcery', 'magecraft', 'replicate'],
+        'graveyard': ['graveyard', 'from your graveyard', 'mill', 'unearth', 'flashback', 'escape', 'delve', 'dredge'],
+        'sacrifice': ['sacrifice a creature', 'sacrifice a permanent', 'sacrifice another', 'whenever you sacrifice', 'sacrifice'],
+        'extb': ['whenever a creature dies', 'whenever another creature dies', 'whenever this creature dies', 'when this creature dies', 'dies', 'would die', 'put into a graveyard'],
+        'etb': ['enters the battlefield', 'enters under your control', 'exile and return', 'exile then return', 'blink', 'flicker', 're-enter the battlefield'],
+        'blink': ['blink', 'flicker', 'exile and return', 'exile then return', 'return it to the battlefield'],
+        'removal': ['destroy target', 'destroy all', 'exile target', 'exile all', 'remove from the game', 'destroy'],
+        'buff': ['creatures you control get', 'tokens you control get', 'put a +1/+1 counter', 'proliferate'],
+        'library_control': ['scry', 'on top of your library', 'look at the top', 'reveal the top', 'put it into your hand'],
+        'protection': ['indestructible', 'hexproof', 'shroud', 'protection from', 'prevent all damage', 'you have hexproof', 'you have shroud'],
+        'aristocrats': ['whenever a creature you control dies', 'whenever another creature you control dies', 'whenever you sacrifice', 'each opponent loses', 'you gain 1 life'],
+        'spellslinger': ['instant or sorcery', 'whenever you cast an instant or sorcery', 'magecraft', 'copy target instant', 'copy target sorcery'],
+        'landfall': ['landfall', 'whenever a land enters the battlefield', 'whenever a land enters'],
+        'wheel': ['each player discards', 'then draws', 'discards their hand', 'draw that many cards'],
+        'theft': ['gain control of', 'control of target', 'until end of turn, untap', 'you may cast', 'you may play'],
+        'tutor': ['search your library for a card', 'search your library for an', 'reveal it', 'shuffle'],
+        'counters': ['+1/+1 counter', 'proliferate', 'put a counter on', 'remove a counter from']
     }
     __tags_general = {tag: [phrase.lower() for phrase in phrases] for tag, phrases in __tags_general.items()}
 
     __tags_joint = {
-        'control':[['counter', 'spell'],],
-        'ramp':[['Untap', 'Land'],['Search your library', 'land'],['Add', 'mana'],['Add', '{', '}'],],
-        'protection':[['prevent', 'damage'],],
-        'etb':[['exile', 'return'], ['enters', 'battlefield']],
-        'extb':[['dies'],['put into', 'graveyard'],['when', 'dies'],['graveyard', 'battlefield'], ['would', 'die']],
-        'life_gain':[['gain', 'life']],
-        'life_drain':[['lose', 'life'],['pay', 'life']],
-        'stax':[['whenever','taps']],
-        'buff':[['creatures', 'you control', 'get'],['you control', 'get'],],
-        'token':[['token', 'creature'],['tokens', 'you control'],],
+        'control': [
+            ['counter', 'target'],
+            ['exile', 'target'],
+            ['destroy', 'target'],
+            ['return', 'to its owner'],
+        ],
+        'removal': [
+            ['destroy', 'target'],
+            ['exile', 'target'],
+            ['destroy', 'all'],
+            ['exile', 'all'],
+        ],
+        'ramp': [
+            ['untap', 'land'],
+            ['search your library', 'land'],
+            ['put', 'onto the battlefield'],
+            ['add', 'mana'],
+            ['create', 'treasure'],
+            ['play', 'an additional land'],
+        ],
+        'tutor': [
+            ['search your library', 'a card'],
+            ['search your library', 'reveal'],
+            ['search your library', 'shuffle'],
+        ],
+        'protection': [
+            ['prevent', 'damage'],
+            ['gains', 'hexproof'],
+            ['gains', 'indestructible'],
+        ],
+        'etb': [
+            ['enters', 'the battlefield'],
+            ['enters', 'battlefield'],
+        ],
+        'blink': [
+            ['exile', 'return'],
+            ['exile', 'then return'],
+        ],
+        'extb': [
+            ['when', 'dies'],
+            ['whenever', 'dies'],
+            ['put into', 'graveyard'],
+            ['would', 'die'],
+        ],
+        'aristocrats': [
+            ['sacrifice', 'a creature'],
+            ['creature', 'dies'],
+            ['each opponent', 'loses'],
+        ],
+        'life_gain': [['gain', 'life']],
+        'life_drain': [['lose', 'life'], ['pay', 'life']],
+        'wheel': [
+            ['each player', 'discards'],
+            ['then', 'draw'],
+        ],
+        'spellslinger': [
+            ['instant', 'or', 'sorcery'],
+            ['whenever you cast', 'instant'],
+            ['whenever you cast', 'sorcery'],
+        ],
+        'stax': [
+            ['players can\'t', 'cast'],
+            ['opponents can\'t', 'draw'],
+            ['spells cost', 'more'],
+        ],
+        'buff': [
+            ['creatures', 'you control', 'get'],
+            ['tokens', 'you control', 'get'],
+            ['put', '+1/+1', 'counter'],
+        ],
+        'token': [
+            ['token', 'creature'],
+            ['tokens', 'you control'],
+            ['create', 'a', 'token'],
+        ],
+        'landfall': [
+            ['whenever', 'a land', 'enters'],
+            ['land', 'enters', 'the battlefield'],
+        ],
     }
     __tags_joint = {tag: [[p.lower() for p in pair] for pair in pairs] for tag, pairs in __tags_joint.items()}
 
     __tags_regex = {
-        'aggro': [r'attack each turn', r'deal \d+ damage'],
-        'combo': [r'cast for {0}'],
-        'control': [r'counter target \w spell'],
-        'ramp': [r'add {\w}', r'search your library for a (|[a-zA-Z]+) land'],
-        'card_draw': [r'draw (\d+|[a-zA-Z]+) cards'],
-        'life_gain': [r'gain \d life',r'gain \w life',r'gains \d life',r'gains \w life'],
-        'life_drain': [r'loses \d life',r'loses \w life',r'pays \d life',r'pays \w life'],
-        'burn': [r'deal \d+ damage', r'deals \d+ damage', r'deals \w damage'],
-        'stax': [r'cost {\d+} more to cast'],
-        'buff': [r'\+\d/\++\d',r'\+\w/\++\w',r'\+\w/\++\d',r'\+\d/\++\w',r'\-\d/\++\d',r'\-\w/\++\w',r'\-\w/\++\d',r'\-\d/\++\w',r'\+\d/\-+\d',r'\+\w/\-+\w',r'\+\w/\-+\d',r'\+\d/\-+\w'],
+        'aggro': [
+            r'attack each turn',
+            r'additional combat phase',
+            r'take an extra combat phase',
+            r'deals? \\d+ damage'
+        ],
+        'combo': [
+            r'cast for \\{0\\}',
+            r'you win the game',
+            r'opponent loses the game',
+            r'repeat this process'
+        ],
+        'control': [
+            r'counter target .* spell',
+            r'return target .* to its owner\\x27s hand',
+            r'exile target .*'
+        ],
+        'ramp': [
+            r'add \\{[wubrgc]\\}',
+            r'add \\{\\d+\\}',
+            r'search your library for a(?:n)? (?:basic )?(?:[a-zA-Z]+ )?land',
+            r'put (?:it|that card) onto the battlefield(?: tapped)?',
+            r'play an additional land'
+        ],
+        'tutor': [
+            r'search your library for a card',
+            r'search your library for an? (?:artifact|creature|enchantment|instant|sorcery|land|planeswalker) card'
+        ],
+        'card_draw': [
+            r'draw (\\d+|[a-zA-Z]+) cards?',
+            r'investigate',
+            r'exile the top (\\d+|[a-zA-Z]+) cards? of your library.*you may (?:play|cast)'
+        ],
+        'life_gain': [
+            r'gain \\d+ life',
+            r'gain [a-zA-Z]+ life',
+            r'gains \\d+ life',
+            r'gains [a-zA-Z]+ life'
+        ],
+        'life_drain': [
+            r'loses \\d+ life',
+            r'loses [a-zA-Z]+ life',
+            r'pays \\d+ life',
+            r'pays [a-zA-Z]+ life'
+        ],
+        'burn': [
+            r'deals? \\d+ damage',
+            r'deals? [a-zA-Z]+ damage'
+        ],
+        'stax': [
+            r'costs? \\{\\d+\\} more to cast',
+            r'players can\\x27t',
+            r'opponents can\\x27t'
+        ],
+        'buff': [
+            r'\\+\\d+/\\+\\d+',
+            r'\\+\\d+/\\-\\d+',
+            r'\\-\\d+/\\+\\d+',
+            r'\\+\\w+/\\+\\w+',
+            r'\\+\\w+/\\-\\w+',
+        ],
+        'counters': [
+            r'\\+1/\\+1 counter',
+            r'proliferate',
+            r'put a counter on',
+            r'remove a counter from'
+        ],
+        'wheel': [
+            r'each player discards.*then draws',
+            r'discards their hand.*draws'
+        ],
+        'blink': [
+            r'exile .* then return .* to the battlefield',
+            r'exile .* return .* to the battlefield'
+        ],
+        'spellslinger': [
+            r'instant or sorcery',
+            r'whenever you cast an? (?:instant|sorcery)'
+        ]
     }
     __tags_regex = {tag: [pat.lower() for pat in pats] for tag, pats in __tags_regex.items()}
 
@@ -75,9 +219,9 @@ class CardFields(object):
         'equipment': ['Equipment', 'Fortification', 'Vehicle', 'Attraction', 'Contraption'],
         'artifact': ['Blood', 'Clue', 'Food', 'Gold', 'Incubator', 'Junk', 'Map', 'Powerstone', 'Treasure'],
         'planeswalker': ['Planeswalker'],
-        'battle': ['Seige'],
+        'battle': ['Siege'],
         'voltron': ['Equipment', 'Vehicle', 'Aura', 'Background', 'Saga', 'Role', 'Shard', 'Cartouche', 'Case', 'Class', 'Curse', 'Rune'],
-        'discard': ['blood'],
+        'discard': ['Blood'],
     }
     __subtype_tags = {tag: [s.lower() for s in subs] for tag, subs in __subtype_tags.items()}
 
@@ -114,7 +258,11 @@ class CardFields(object):
 
     __all_tags = set(__tags_general.keys()).union(set(__tags_joint.keys())).union(set(__tags_regex.keys())).union(set(__subtype_tags.keys()))
 
-    __BASIC_LANDS = {"Plains","Island","Swamp","Mountain","Forest","Wastes"}
+    __BASIC_LANDS = {"Plains","Island","Swamp","Mountain","Forest","Wastes"} 
+    __BASIC_LANDS = set([land.lower() for land in __BASIC_LANDS])
+
+    _BASIC_LANDS_WITH_SNOW = {"Plains","Island","Swamp","Mountain","Forest","Wastes", "Snow-Covered Plains", "Snow-Covered Island", "Snow-Covered Swamp", "Snow-Covered Mountain", "Snow-Covered Forest"}
+    _BASIC_LANDS_WITH_SNOW = set([land.lower() for land in _BASIC_LANDS_WITH_SNOW])
 
     __COLOR_BASIC_LAND_MAP = {
         'W': 'Plains',
@@ -123,6 +271,26 @@ class CardFields(object):
         'R': 'Mountain',
         'G': 'Forest',
         'C': 'Wastes'
+    }
+
+    tag_synergy: Dict[str, set[str]] = {
+        "sacrifice": {"aristocrats", "graveyard", "reanimation", "token", "extb"},
+        "aristocrats": {"sacrifice", "extb", "token", "graveyard", "reanimation", "life_drain"},
+        "graveyard": {"mill", "discard", "reanimation", "sacrifice", "extb"},
+        "reanimation": {"graveyard", "mill", "discard", "sacrifice", "extb"},
+        "mill": {"graveyard", "reanimation"},
+        "discard": {"graveyard", "reanimation", "wheel", "life_drain"},
+        "wheel": {"discard", "card_draw", "life_drain"},
+        "spellslinger": {"storm", "card_draw", "control"},
+        "storm": {"spellslinger", "card_draw"},
+        "blink": {"etb", "token", "control"},
+        "etb": {"blink", "token"},
+        "token": {"buff", "sacrifice", "aristocrats", "etb"},
+        "counters": {"buff", "combat"},
+        "voltron": {"equipment", "enchantment", "protection", "combat"},
+        "control": {"removal", "library_control", "card_draw"},
+        "ramp": {"landfall", "card_draw"},
+        "landfall": {"ramp", "token", "etb"},
     }
 
     @staticmethod
@@ -201,6 +369,14 @@ class CardFields(object):
     def color_basic_land_map() -> Dict[str, str]: return CardFields.__COLOR_BASIC_LAND_MAP
 
     @staticmethod
+    def basic_type_name(card_name: str) -> str:
+        if card_name not in CardFields.__BASIC_LANDS:
+            return None
+        for t in ("Plains", "Island", "Swamp", "Mountain", "Forest", "Wastes"):
+            if t.lower() in card_name.lower():
+                return t
+        return "Wastes"
+    @staticmethod
     def rarity_map() -> Dict[int, str]: return dict({(i+1, CardFields.__rarities[i]) for i in range(len(CardFields.__rarities))})
 
     @staticmethod
@@ -208,6 +384,9 @@ class CardFields(object):
 
     @staticmethod
     def all_tags() -> set[str]: return CardFields.__all_tags
+
+    @staticmethod
+    def tag_synergy_map() -> Dict[str, set[str]]: return CardFields.tag_synergy
 
     @staticmethod
     def pred_dim(dim: int) -> Callable[[str, np.ndarray], bool]:
@@ -266,19 +445,19 @@ class CardFields(object):
     
     @staticmethod
     def tag_card(card: Card) -> set[str]:
-        return set(card.card_types).union(CardFields.tag_text(card.card_name, card.text).union(CardFields.tag_subtypes(card.card_subtypes)))
+        return CardFields.tag_text(card.card_name, card.text).union(CardFields.tag_subtypes(card.card_subtypes))
     
     @staticmethod
     def parse_mtgjson_card(card: dict) -> Card:
         card_kwargs = {
-            'commander_legal': 'commander' in card['legalities'] and card['legalities']['commander']=="Legal",
+            'commander_legal': 'commander' in card['legalities'] and card['legalities']['commander'] == "Legal" and 'paper' in card['availability'],
             'card_name': card.get('name', ''),
             'card_types': [str(s).lower() for s in card.get('types', '')],
             'card_supertypes': [str(s).lower() for s in card.get('supertypes', '')],
             'card_subtypes': [str(s).lower() for s in card.get('subtypes', '')],
             'mana_cost': card.get('manaValue', -1),
             'mana_cost_exp': card.get('manaCost', ''),
-            'color_identity': [str(x).upper() for x in sorted([x for x in list(set(card.get('manaCost', ''))) if str(x).isalpha()])],
+            'color_identity': card.get('colorIdentity', []),
             'defense': card.get('defense', ''),
             'rarity': card.get('rarity', ''),
             'text': card.get('text', ''),

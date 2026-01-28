@@ -21,6 +21,12 @@ class VectorStore(object):
         if not isinstance(item, VectorStore): return False
         return self.vector_data.items()==item.vector_data.items()
 
+    def __hash__(self) -> int:
+        return hash(frozenset(self.vector_data.items()))
+
+    def __contains__(self, key) -> bool:
+        return key in self.vector_data
+
     def __len__(self) -> int:
         return len(self.vector_data.keys())
 
@@ -208,6 +214,12 @@ class VectorDatabase(object):
         if not isinstance(item, VectorDatabase): return False
         return (self.vector_store == item.vector_store)
 
+    def __hash__(self) -> int:
+        return hash(self.vector_store)
+
+    def __contains__(self, key) -> bool:
+        return key in self.vector_store
+    
     def __len__(self) -> int:
         return len(self.vector_store)
 
@@ -255,12 +267,9 @@ class VectorDatabase(object):
         
         for game_set in set_data:
             for card in game_set['cards']:
-                print(card['legalities'])
-                print(card['availability'])
-                print('commander' in card['legalities'])
-                print(card['legalities']['commander'])
                 if 'commander' in card['legalities'] and card['legalities']['commander'] == "Legal" and 'paper' in card['availability']:
-                    v_id, vector = self.encoder.encode(CardFields.parse_mtgjson_card(card))
+                    card = CardFields.parse_mtgjson_card(card)
+                    v_id, vector = self.encoder.encode(card)
                     self.vector_store.add_vector(v_id, vector)
                     num_cards += 1
 
@@ -338,6 +347,12 @@ class VectorDatabase(object):
     def to_ndarray(self, *, predicate: Optional[Callable[[str, np.ndarray], bool]] = None) -> np.ndarray:
         return self.vector_store.to_ndarray(predicate=predicate)
     
+    def to_dataframe(self, *, predicate: Optional[Callable[[str, np.ndarray], bool]] = None) -> pd.DataFrame:
+        return self.vector_store.to_dataframe(predicate=predicate)
+    
+    def to_index(self) -> Dict[str, int]:
+        return {k: i for i, k in enumerate(self.vector_store.keys())}
+    
 if __name__ == "__main__":
     vd = VectorDatabase(CardEncoder(), CardDecoder())
     vd.parse_json(filename="datasets/AllPrintings.json")
@@ -352,5 +367,6 @@ if __name__ == "__main__":
     print(vd.find_id("Horus"))
     print(vd.find_id("Magnus"))
     print(vd.find_vector_pair("Abaddon"))
+    print(vd.get_vector_description(vd.find_id("Ayara, Widow of the Realm")))
 
     # vd.save("datasets/vector_data.pt")
