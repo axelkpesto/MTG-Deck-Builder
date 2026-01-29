@@ -36,6 +36,7 @@ limiter = Limiter(
     app=app,
     key_func=lambda: str(getattr(g, "api_key_id", get_remote_address())),
     default_limits=["120 per minute"],
+    storage_uri=os.environ.get("REDIS_URL", "")
 )
 
 def error(message: str, status: int = 400, **extra: Any):
