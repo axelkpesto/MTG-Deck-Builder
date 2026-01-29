@@ -8,7 +8,7 @@ https://mtgjson.com/data-models/card/card-set/ - CardSet Definition <br/>
 <br/>ALL DATA OWNED AND MANAGED BY MTGJSON AT https://mtgjson.com/ <br/>
 
 <br/>API Use: <br/>
-https://api-891777334325.us-west2.run.app/ <br/>
+https://mtg-deckbuilder-api-891777334325.us-west2.run.app <br/>
 Please be mindful of your request frequency. <br/>
 
 <br/> Contact me at axelkpesto@gmail.com for more information
