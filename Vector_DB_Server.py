@@ -300,7 +300,7 @@ def predict_from_vector(vec_np: np.ndarray, threshold: float, top_k: int = 8):
     }
 
 if __name__ == '__main__':
-    app.run()
+    app.run(host='0.0.0.0', port=int(os.environ.get('DEFAULT_PORT', 8080)))
     import requests
     load_dotenv()
     API_KEY = os.environ.get("FIREBASE_API_KEY", "")
