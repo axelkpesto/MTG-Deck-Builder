@@ -1,11 +1,2 @@
 runtime: python312
 entrypoint: gunicorn -b :$PORT Vector_DB_Server:app
-
-env_variables:
-  ENABLE_DOCS: "1"
-  OPENAPI_SPEC_PATH: "openapi.yaml"
-
-handlers:
-  - url: /openapi.yaml
-    static_files: openapi.yaml
-    upload: openapi.yaml
