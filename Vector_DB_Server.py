@@ -10,6 +10,7 @@ from flask_limiter.util import get_remote_address
 from Vector_Database import VectorDatabase
 from Tagging_Model import load_model
 from firestore.Firestore_Connector import authenticate_api_key, touch_last_used
+from config import CONFIG
 
 import torch
 import numpy as np
@@ -25,12 +26,12 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 model, class_names = None, []
 try:
-    model, class_names = load_model("models/tagging_mlp.pt")
+    model, class_names = load_model(CONFIG.models["TAGGING_MODEL_PATH"])
     model.to(device).eval()
 except Exception as e:
     print(f"Error loading tagging model: {e}")
 
-vd = VectorDatabase.load_static("datasets/vector_data.pt")
+vd = VectorDatabase.load_static(CONFIG.datasets["VECTOR_DATABASE_PATH"])
 
 limiter = Limiter(
     app=app,
@@ -49,7 +50,7 @@ def clamp_int(x: int, lo: int, hi: int) -> int:
 def clamp_float(x: float, lo: float, hi: float) -> float:
     return max(lo, min(hi, x))
 
-def get_api_key_from_request() -> str | None:
+def get_api_key_from_request(request) -> str | None:
     auth = request.headers.get("Authorization", "")
     if auth.lower().startswith("bearer "):
         return auth.split(" ", 1)[1].strip()
@@ -73,7 +74,7 @@ def _authenticate_api_key():
     if request.path in ["/", "/help", "/examples", "/status"]:
         return
 
-    api_key = request.headers.get("X-API-KEY")
+    api_key = get_api_key_from_request(request)
     if not api_key:
         return error("missing API key", 401)
 
@@ -86,7 +87,7 @@ def _authenticate_api_key():
     
     g.api_key_id = info["api_key_id"]
     g.user_id = info["user_id"]
-    g.rate_limit = info.get("rate_limit")
+    g.rate_limit = info["rate_limit"]
     g.last_raw = api_key
 
     try:
@@ -128,7 +129,8 @@ def help():
             "/get_random_vector": "Get a random vector from the database",
             "/get_random_vector_description": "Get the description for a random vector from the database",
             "/get_similar_vectors/STR?num_vectors=INT": "Get the most similar vectors to the given id, num_vectors is optional and defaults to 5",
-            "/get_tags/STR?threshold=FLOAT&top_k=INT": "Get the tags for the given id, threshold and top_k are optional and default to 0.5 and 8 respectively"
+            "/get_tags/STR?threshold=FLOAT&top_k=INT": "Get the tags for the given id, threshold and top_k are optional and default to 0.5 and 8 respectively",
+            "/get_tags_from_vector": {"method": "POST", "body": {"vector": [float, ...], "threshold": float, "top_k": int}, "description": "Get the tags for the given vector, threshold and top_k are optional and default to 0.5 and 8 respectively"}
         }
     })
 
@@ -141,7 +143,8 @@ def examples():
             "/get_random_vector": "Get a random vector from the database",
             "/get_random_vector_description": "Get the description for a random vector from the database",
             "/get_similar_vectors/Magnus the Red?num_vectors=10": "Get the most similar vectors to the given id, num_vectors is optional and defaults to 5",
-            "/get_tags/Magnus the Red?threshold=0.5&top_k=8": "Get the tags for the given id, threshold and top_k are optional and default to 0.5 and 8 respectively"
+            "/get_tags/Magnus the Red?threshold=0.5&top_k=8": "Get the tags for the given id, threshold and top_k are optional and default to 0.5 and 8 respectively",
+            "/get_tags_from_vector": {"method": "POST", "body": {"vector": [float, ...], "threshold": 0.5, "top_k": 8}, "description": "Get the tags for the given vector, threshold and top_k are optional and default to 0.5 and 8 respectively"}
         }
     })
 
@@ -150,7 +153,6 @@ def health():
     healthy = (model is not None) and (vd is not None) and len(vd) > 0
     return jsonify({
         "status": "healthy" if healthy else "error",
-        "your_api_key": getattr(g, "api_key_id", None),
         "model_loaded": model is not None,
         "vector_db_loaded": vd is not None and len(vd) > 0,
         "vd_size": len(vd) if vd is not None else 0,

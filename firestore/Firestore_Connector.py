@@ -8,6 +8,7 @@ from firestore.Firebase_Auth import generate_api_key as generate_firebase_api_ke
 from dotenv import load_dotenv
 
 load_dotenv()
+
 def get_firestore_client(project_id: str | None = None) -> firestore.Client:
     return firestore.Client(project=project_id)
 
@@ -69,6 +70,6 @@ def touch_last_used(api_key_id: str) -> None:
     doc_ref.update({"last_used_at": datetime.now(timezone.utc)})
 
 if __name__ == "__main__":
-    user_id = "test_user_123"
-    raw_key = create_api_key(user_id)
+    user_id = "unlimited_user"
+    raw_key = create_api_key(user_id, rate_limit="unlimited")
     print(f"Generated API Key: {raw_key}")

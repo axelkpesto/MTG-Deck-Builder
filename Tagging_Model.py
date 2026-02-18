@@ -11,15 +11,16 @@ from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import MultiLabelBinarizer
 from sklearn.metrics import accuracy_score, f1_score, precision_score, recall_score, classification_report
 from Vector_Database import VectorDatabase
-from Card_Lib import CardEncoder, CardDecoder
+from card_data import CardEncoder, CardDecoder
+from config import CONFIG
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 def build_dataset() -> pd.DataFrame:
     vd = VectorDatabase(CardEncoder(), CardDecoder())
-    vd.load("datasets/vector_data.pt")
+    vd.load(CONFIG.datasets["VECTOR_DATABASE_PATH"])
     
-    with open("datasets/CommanderCards.json", "r", encoding="utf-8") as f:
+    with open(CONFIG.datasets["CARDS_DATASET_PATH"], "r", encoding="utf-8") as f:
         data = json.load(f)
 
     print(len(data))
@@ -199,7 +200,7 @@ def load_model(path: str) -> tuple[nn.Module, list[str]]:
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--load", action="store_true", default=False, help="If set, load the trained model.")
-    parser.add_argument("--load_path", type=str, default="models/tagging_mlp.pt")
+    parser.add_argument("--load_path", type=str, default=CONFIG.models["TAGGING_MODEL_PATH"])
 
     parser.add_argument("--epochs", type=int, default=20)
     parser.add_argument("--batch_size", type=int, default=256)
@@ -210,7 +211,7 @@ def main():
     parser.add_argument("--show_n", type=int, default=8, help="How many test examples to print.")
 
     parser.add_argument("--save", action="store_true", default=True, help="If set, save the trained model.")
-    parser.add_argument("--save_path", type=str, default="models/tagging_mlp.pt")
+    parser.add_argument("--save_path", type=str, default=CONFIG.models["TAGGING_MODEL_PATH"])
     parser.add_argument("--amp", action="store_true", default=True, help="Use mixed precision on CUDA.")
     parser.add_argument("--no-amp", dest="amp", action="store_false")
     parser.add_argument("--seed", type=int, default=42)

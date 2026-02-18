@@ -376,6 +376,15 @@ class CardFields(object):
             if t.lower() in card_name.lower():
                 return t
         return "Wastes"
+    
+    @staticmethod
+    def is_basic_land(card_name: str) -> bool:
+        return card_name.strip().lower() in CardFields.basic_lands()
+
+    @staticmethod
+    def basic_land_type(card_name: str) -> str:
+        return CardFields.basic_type_name(card_name.strip().lower())
+
     @staticmethod
     def rarity_map() -> Dict[int, str]: return dict({(i+1, CardFields.__rarities[i]) for i in range(len(CardFields.__rarities))})
 

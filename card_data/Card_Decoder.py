@@ -108,3 +108,27 @@ class CardDecoder(object):
 
         Y = torch.cat([types, supertypes, subtypes, mana, colors, rarity, embed], dim=-1)
         return Y
+
+    def land_mask_from_vectors(self, node_features: torch.Tensor, threshold: float = 0.5) -> torch.Tensor:
+        land_type_index = CardFields.card_types().index("land")
+        type_slice_start, _ = self.slice_map["types"]
+        return node_features[:, type_slice_start + land_type_index] >= threshold
+
+    def color_identity_mask_from_vectors(self, node_features: torch.Tensor, threshold: float = 0.5) -> torch.Tensor:
+        color_slice_start, color_slice_end = self.slice_map["colors"]
+        return node_features[:, color_slice_start:color_slice_end] >= threshold
+
+    def mana_value_from_vectors(self, node_features: torch.Tensor) -> torch.Tensor:
+        mana_slice_start, mana_slice_end = self.slice_map["mana"]
+        mv = node_features[:, mana_slice_start:mana_slice_end].squeeze(-1)
+        return torch.clamp(mv, min=0.0, max=30.0)
+    
+    def allowed_basic_types_from_commander_colors(cmd_colors: torch.Tensor) -> List[str]:
+        colors = set()
+        for i, c in enumerate(CardFields.color_identities()):
+            if c == "C":
+                continue
+            if bool(cmd_colors[i].item()):
+                colors.add(c)
+        colors = [CardFields.color_basic_land_map()[c] for c in colors]
+        return colors if colors else ["Wastes"]

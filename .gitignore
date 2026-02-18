@@ -11,4 +11,6 @@ venv/
 .mypy_cache/
 *.txt
 !requirements.txt
-auth/
+!Dockerfile.txt
+text/
+test.py

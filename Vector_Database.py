@@ -3,8 +3,9 @@ import numpy as np
 import pandas as pd
 import os
 import random
-from Card_Lib import CardEncoder, CardDecoder, CardFields
+from card_data import Card_Encoder, CardDecoder, CardFields
 from typing import Callable, Iterator, Optional, Tuple, List, Dict, Any
+from config import CONFIG
 
 class VectorStore(object):
     def __init__(self, encoder, decoder) -> None:
@@ -13,13 +14,18 @@ class VectorStore(object):
         self.vector_data: Dict[str, torch.Tensor] = {}
         self.device: torch.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         print(self.device)
-    
+
+        self._cache_dirty: bool = True
+        self._cache_ids: List[str] = []
+        self._cache_matrix: Optional[torch.Tensor] = None  # (N, D) normalized float32
+
     def __str__(self) -> str:
         return str(dict(map(lambda kv: (kv[0], self.decoder.decode(kv[0], kv[1])), self.items())))
-    
+
     def __eq__(self, item) -> bool:
-        if not isinstance(item, VectorStore): return False
-        return self.vector_data.items()==item.vector_data.items()
+        if not isinstance(item, VectorStore):
+            return False
+        return self.vector_data.items() == item.vector_data.items()
 
     def __hash__(self) -> int:
         return hash(frozenset(self.vector_data.items()))
@@ -32,7 +38,7 @@ class VectorStore(object):
 
     def __iter__(self) -> Iterator[Tuple[str, torch.Tensor]]:
         return iter(self.vector_data.items())
-    
+
     def __getitem__(self, key) -> torch.Tensor:
         if isinstance(key, str):
             return self.vector_data[key]
@@ -44,22 +50,47 @@ class VectorStore(object):
                 raise IndexError("Index out of range")
         else:
             raise TypeError("Invalid key type for subscripting")
-    
+
+    def _mark_cache(self, dirty: bool = True) -> None:
+        self._cache_dirty = dirty
+
+    def _l2_normalize(self, x: torch.Tensor, eps: float = 1e-8) -> torch.Tensor:
+        denom = torch.clamp(torch.linalg.norm(x, dim=-1, keepdim=True), min=eps)
+        return x / denom
+
+    def _rebuild_similarity_cache(self) -> None:
+        self._cache_ids = list(self.vector_data.keys())
+        if len(self._cache_ids) == 0:
+            self._cache_matrix = None
+            self._mark_cache(dirty=False)
+            return
+
+        mat = torch.stack(
+            [self.vector_data[k].float().to(self.device) for k in self._cache_ids],
+            dim=0
+        )
+
+        mat = self._l2_normalize(mat)
+        self._cache_matrix = mat
+        self._mark_cache(dirty=False)
+
     def clear(self) -> None:
         self.vector_data = {}
+        self._mark_cache(dirty=True)
         if self.device.type == 'cuda':
             torch.cuda.empty_cache()
 
     def items(self) -> List[Tuple[str, np.array]]:
         return list(self.vector_data.items())
-    
+
     def keys(self) -> List[str]:
         return list(self.vector_data.keys())
-    
+
     def values(self) -> List[np.array]:
         return list(self.vector_data.values())
 
     def setdefault(self, v_id: str, vector: np.array) -> None:
+        self._mark_cache(dirty=True)
         return self.vector_data.setdefault(v_id, vector)
 
     def contains(self, value: object) -> bool:
@@ -69,18 +100,19 @@ class VectorStore(object):
         if predicate:
             return np.array([v.cpu().numpy() for k, v in self.vector_data.items() if predicate(k, v)])
         return np.array([v.cpu().numpy() for v in self.vector_data.values()])
-    
+
     def to_dataframe(self, *, predicate: Optional[Callable[[str, np.ndarray], bool]] = None) -> pd.DataFrame:
         if predicate:
             return pd.DataFrame(dict((k, v.cpu().numpy()) for k, v in self.vector_data.items() if predicate(k, v)))
         return pd.DataFrame(dict((k, v.cpu().numpy()) for k, v in self.vector_data.items()))
 
     def add_vector(self, v_id: str, vector: np.ndarray) -> None:
-        assert(isinstance(v_id, str))
+        assert isinstance(v_id, str)
         if self.contains(v_id):
             return
         vector_tensor = torch.from_numpy(vector).float().to(self.device)
         self.vector_data[v_id] = vector_tensor
+        self._mark_cache(dirty=True)
 
     def get(self, v_id: str, default: Any) -> torch.Tensor:
         return self.vector_data[v_id] if v_id in self.vector_data else default
@@ -88,8 +120,8 @@ class VectorStore(object):
     def get_list(self, v_ids: List[str], default: Any) -> List[torch.Tensor]:
         return [self.get(v_id, default) for v_id in v_ids]
 
-    def get_vector(self, v_id: str) -> np.ndarray:
-        return self.vector_data[v_id].cpu().numpy()
+    def get_vector(self, v_id: str) -> torch.Tensor:
+        return self.vector_data[v_id]
 
     def get_vector_tup(self, v_id: str) -> Tuple[str, torch.Tensor]:
         return (v_id, self.get_vector(v_id))
@@ -101,23 +133,28 @@ class VectorStore(object):
     def size(self) -> int:
         return len(self.vector_data.keys())
 
-    def get_similar_vectors(self, q_vector: torch.Tensor, n_results: int = 5) -> List[Tuple[str, torch.Tensor]]:
-        q_vector_tensor = torch.tensor(q_vector, dtype=torch.float32).to(self.device)
+    def get_similar_vectors(self, q_vector: torch.Tensor, n_results: int = 5) -> List[Tuple[str, float]]:
+        q = q_vector.detach() if isinstance(q_vector, torch.Tensor) else torch.tensor(q_vector)
+        q = q.float().to(self.device)
+        q = self._l2_normalize(q)
 
-        results = []
-        for vector_id, vector in self.vector_data.items():
-            vector_tensor = vector.float().to(self.device)
-            similarity = torch.matmul(q_vector_tensor, vector_tensor) / (
-                torch.norm(q_vector_tensor) * torch.norm(vector_tensor)
-            )
-            results.append((vector_id, similarity.item()))
+        if self._cache_dirty or self._cache_matrix is None:
+            self._rebuild_similarity_cache()
 
-        results.sort(key=lambda x: x[1], reverse=True)
-        return results[:n_results + 1]
+        if self._cache_matrix is None or len(self._cache_ids) == 0:
+            return []
+
+        scores = torch.mv(self._cache_matrix, q)
+
+        k = min(int(n_results) + 1, scores.shape[0])
+        top_scores, top_idx = torch.topk(scores, k=k, largest=True, sorted=True)
+        top_scores = top_scores.detach().cpu().numpy().tolist()
+        top_idx = top_idx.detach().cpu().numpy().tolist()
+        return [(self._cache_ids[i], float(s)) for i, s in zip(top_idx, top_scores)]
 
     def nearest_by_embedding(self, queries: np.ndarray, candidates: np.ndarray, slice_index: int, topk: int = 8) -> List[np.ndarray]:
-        #queries: (S, D), represents S query vectors
-        #candidates: (N, D), represents N candidate vectors (often whole vector DB)
+        # queries: (S, D)
+        # candidates: (N, D)
         dim = candidates.shape[-1]
         s_emb = slice(slice_index, dim)
         s_head = slice(0, slice_index)
@@ -164,7 +201,7 @@ class VectorStore(object):
         if self.decoder:
             return self.decoder.decode_to_dict(v_id, self.get_vector(v_id=v_id))
         return {v_id: str(self.get_vector(v_id=v_id))}
-    
+
     def save(self, filename: str) -> None:
         cpu_dict = {k: v.detach().cpu() for k, v in self.vector_data.items()}
         torch.save(cpu_dict, filename)
@@ -177,6 +214,8 @@ class VectorStore(object):
             if not isinstance(v, torch.Tensor):
                 v = torch.tensor(v)
             self.vector_data[k] = v.to(self.device)
+
+        self._mark_cache(dirty=True)
 
     def filter_iterator(self, predicate: Callable[[str, np.ndarray], bool], *, limit: Optional[int] = None) -> Iterator[Tuple[str, np.ndarray]]:
         count = 0
@@ -200,7 +239,8 @@ class VectorStore(object):
             else:
                 out.append((name, vec))
         return out
-    
+
+
 class VectorDatabase(object):
     def __init__(self, encoder, decoder) -> None:
         self.encoder = encoder
@@ -209,9 +249,10 @@ class VectorDatabase(object):
 
     def __str__(self) -> str:
         return str(self.vector_store)
-    
+
     def __eq__(self, item) -> bool:
-        if not isinstance(item, VectorDatabase): return False
+        if not isinstance(item, VectorDatabase):
+            return False
         return (self.vector_store == item.vector_store)
 
     def __hash__(self) -> int:
@@ -219,13 +260,13 @@ class VectorDatabase(object):
 
     def __contains__(self, key) -> bool:
         return key in self.vector_store
-    
+
     def __len__(self) -> int:
         return len(self.vector_store)
 
     def __iter__(self) -> bool:
         return (x for x in self.vector_store)
-    
+
     def __getitem__(self, key) -> torch.Tensor:
         if isinstance(key, str):
             return self.vector_store[key]
@@ -245,10 +286,10 @@ class VectorDatabase(object):
 
     def items(self) -> List[Tuple[str, np.array]]:
         return self.vector_store.items()
-    
+
     def keys(self) -> List[str]:
         return self.vector_store.keys()
-    
+
     def values(self) -> List[np.array]:
         return self.vector_store.values()
 
@@ -257,14 +298,14 @@ class VectorDatabase(object):
 
     def to_ndarray(self, *, predicate: Optional[Callable[[str, np.ndarray], bool]] = None) -> np.ndarray:
         return self.vector_store.to_ndarray(predicate=predicate)
-    
+
     def to_dataframe(self, *, predicate: Optional[Callable[[str, np.ndarray], bool]] = None) -> pd.DataFrame:
         return self.vector_store.to_dataframe(predicate=predicate)
 
     def parse_json(self, filename: str, max_lines: int = -1) -> VectorStore:
         set_data: pd.DataFrame = self._parse_file(filename)['data'][2:]
         num_cards: int = 0
-        
+
         for game_set in set_data:
             for card in game_set['cards']:
                 if 'commander' in card['legalities'] and card['legalities']['commander'] == "Legal" and 'paper' in card['availability']:
@@ -282,7 +323,7 @@ class VectorDatabase(object):
 
     def add_vector(self, v_id: str, vector: np.ndarray) -> None:
         self.vector_store.add_vector(v_id, vector)
-    
+
     def get_encoder(self):
         return self.encoder
 
@@ -297,28 +338,28 @@ class VectorDatabase(object):
 
     def get_vector(self, v_id: str) -> torch.Tensor:
         return self.vector_store.get_vector(v_id)
-    
+
     def get_vector_tup(self, v_id: str) -> Tuple[str, torch.Tensor]:
         return self.vector_store.get_vector_tup(v_id)
-    
+
     def get_random_vector(self) -> Tuple[str, torch.Tensor]:
         return self.vector_store.get_random_vector()
-    
-    def get_similar_vectors(self, q_vector: torch.Tensor, n_results: int = 5) -> List[Tuple[str, torch.Tensor]]:
+
+    def get_similar_vectors(self, q_vector: torch.Tensor, n_results: int = 5) -> List[Tuple[str, float]]:
         return self.vector_store.get_similar_vectors(q_vector, n_results)
-    
+
     def nearest_by_embedding(self, queries: np.ndarray, candidates: np.ndarray, slice_index: int, topk: int = 8) -> List[np.ndarray]:
         return self.vector_store.nearest_by_embedding(queries, candidates, slice_index, topk)
 
     def find_vector_pair(self, v_id: str) -> Tuple[str, torch.Tensor]:
         return self.vector_store.find_vector_pair(v_id)
-    
+
     def find_vector(self, v_id: str) -> torch.Tensor:
         return self.vector_store.find_vector(v_id)
 
     def find_id(self, v_id: str) -> str:
         return self.vector_store.find_id(v_id)
-    
+
     def get_vector_description(self, v_id: str) -> str:
         return self.vector_store.describe_vector_string(v_id=v_id)
 
@@ -328,7 +369,7 @@ class VectorDatabase(object):
     def _parse_file(self, filename: str) -> pd.DataFrame:
         assert os.path.isfile(filename), f"{filename} not found."
         return pd.read_json(filename)
-    
+
     def save(self, filename: str) -> None:
         self.vector_store.save(filename)
 
@@ -344,18 +385,13 @@ class VectorDatabase(object):
     def filter(self, predicate: Callable[[str, np.ndarray], bool], *, limit: Optional[int] = None, names_only: bool = False, vectors_only: bool = False) -> List:
         return self.vector_store.filter(predicate, limit=limit, names_only=names_only, vectors_only=vectors_only)
 
-    def to_ndarray(self, *, predicate: Optional[Callable[[str, np.ndarray], bool]] = None) -> np.ndarray:
-        return self.vector_store.to_ndarray(predicate=predicate)
-    
-    def to_dataframe(self, *, predicate: Optional[Callable[[str, np.ndarray], bool]] = None) -> pd.DataFrame:
-        return self.vector_store.to_dataframe(predicate=predicate)
-    
     def to_index(self) -> Dict[str, int]:
         return {k: i for i, k in enumerate(self.vector_store.keys())}
-    
+
 if __name__ == "__main__":
-    vd = VectorDatabase(CardEncoder(), CardDecoder())
-    vd.parse_json(filename="datasets/AllPrintings.json")
+    # vd = VectorDatabase(CardEncoder(), CardDecoder())
+    # vd.parse_json(filename = CONFIG.datasets["FULL_DATASET_PATH"])
+    vd = VectorDatabase.load_static(CONFIG.datasets["VECTOR_DATABASE_PATH"])
     random_vector = vd.get_random_vector()
 
     print(random_vector)
@@ -367,6 +403,6 @@ if __name__ == "__main__":
     print(vd.find_id("Horus"))
     print(vd.find_id("Magnus"))
     print(vd.find_vector_pair("Abaddon"))
-    print(vd.get_vector_description(vd.find_id("Ayara, Widow of the Realm")))
+    print(vd.get_vector_description(vd.find_id("Mishra, Claimed by Gix")))
 
-    # vd.save("datasets/vector_data.pt")
+    # vd.save(CONFIG.datasets["VECTOR_DATABASE_PATH"])

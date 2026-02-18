@@ -1,24 +1,39 @@
-README.md
+#General
+.env
+.gitignore
+.gitattributes
+.git/
+.vscode/
+
+#Python
 *.pyc
 *.pyo
 *.pyd
 __pycache__
 .pytest_cache
 .python-version
-.vscode/
 venv/
-dataset_builders/
-MTG_GPT.py
-.git/
-.gitignore
-.gitattributes
-.env
 
-*.txt
-!requirements.txt
+#Readme
+README.md
 
+#Ignored Files
 datasets/AllPrintings.json
 datasets/CommanderCards.json
 datasets/DecksSimple.json
 datasets/TaggingLabels.json
 datasets/variants.json
+
+#Unimportant Files
+MTG_GPT.py
+test.py
+
+#Text Files
+*.txt
+!requirements.txt
+!Dockerfile.txt
+
+#Unimportant Folders
+dataset_builders/
+tests/
+text/
