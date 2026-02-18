@@ -19,8 +19,8 @@ Here are some terms you will need to know for building decks:
 """,
 """
 These following rules are extremely important and must be followed exactly. The rules for commander deck building are as follows.:
-- A card’s color identity is its color plus the color of any mana symbols in the card’s rules text. A card’s color identity is established before the game begins, and cannot be changed by game effects. The cards in a deck may not have any colors in their color identity which are not in the color identity of the deck’s commander.
-- A Commander deck must contain exactly 100 cards, including the commander. If you’re playing a companion, it must adhere to color identity and singleton rules. While it is not part of the deck, it is effectively a 101st card.
+- A card's color identity is its color plus the color of any mana symbols in the card's rules text. A card's color identity is established before the game begins, and cannot be changed by game effects. The cards in a deck may not have any colors in their color identity which are not in the color identity of the deck's commander.
+- A Commander deck must contain exactly 100 cards, including the commander. If you're playing a companion, it must adhere to color identity and singleton rules. While it is not part of the deck, it is effectively a 101st card.
 - With the exception of basic lands, no two cards in the deck may have the same English name. There may be no repeated cards in the deck other than basic lands. 
 - All cards must be legal in the commander format. 
 """,
@@ -80,4 +80,3 @@ while(True):
     else:
         commander = Card.where(name=cards_list[0]).all()[0]
         print(chat_with_chatgpt(BUILDER_MESSAGE.format(name=commander.name, type=commander.type, color=commander.color_identity)))
-
