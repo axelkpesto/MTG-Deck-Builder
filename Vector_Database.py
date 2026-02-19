@@ -65,10 +65,7 @@ class VectorStore(object):
             self._mark_cache(dirty=False)
             return
 
-        mat = torch.stack(
-            [self.vector_data[k].float().to(self.device) for k in self._cache_ids],
-            dim=0
-        )
+        mat = torch.stack([self.vector_data[k].float().to(self.device) for k in self._cache_ids], dim=0)
 
         mat = self._l2_normalize(mat)
         self._cache_matrix = mat
@@ -151,31 +148,6 @@ class VectorStore(object):
         top_scores = top_scores.detach().cpu().numpy().tolist()
         top_idx = top_idx.detach().cpu().numpy().tolist()
         return [(self._cache_ids[i], float(s)) for i, s in zip(top_idx, top_scores)]
-
-    def nearest_by_embedding(self, queries: np.ndarray, candidates: np.ndarray, slice_index: int, topk: int = 8) -> List[np.ndarray]:
-        # queries: (S, D)
-        # candidates: (N, D)
-        dim = candidates.shape[-1]
-        s_emb = slice(slice_index, dim)
-        s_head = slice(0, slice_index)
-
-        A = queries[..., s_emb]
-        B = candidates[..., s_emb]
-        A = A / np.clip(np.linalg.norm(A, axis=-1, keepdims=True), 1e-8, None)
-        B = B / np.clip(np.linalg.norm(B, axis=-1, keepdims=True), 1e-8, None)
-        sims = A @ B.T  # (S, N)
-
-        ah = queries[..., s_head]
-        bh = candidates[..., s_head]
-
-        out = []
-        for i in range(queries.shape[0]):
-            bonus = -0.02 * np.abs(ah[i] - bh).mean(axis=-1)
-            scores = sims[i] + bonus
-            idx = np.argpartition(-scores, topk)[:topk]
-            idx = idx[np.argsort(-scores[idx])]
-            out.append(idx)
-        return out
 
     def find_vector_pair(self, q_id: str) -> Tuple[str, torch.Tensor]:
         if q_id in self.vector_data:
@@ -347,9 +319,6 @@ class VectorDatabase(object):
 
     def get_similar_vectors(self, q_vector: torch.Tensor, n_results: int = 5) -> List[Tuple[str, float]]:
         return self.vector_store.get_similar_vectors(q_vector, n_results)
-
-    def nearest_by_embedding(self, queries: np.ndarray, candidates: np.ndarray, slice_index: int, topk: int = 8) -> List[np.ndarray]:
-        return self.vector_store.nearest_by_embedding(queries, candidates, slice_index, topk)
 
     def find_vector_pair(self, v_id: str) -> Tuple[str, torch.Tensor]:
         return self.vector_store.find_vector_pair(v_id)

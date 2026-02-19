@@ -19,9 +19,7 @@ README.md
 
 #Ignored Files
 datasets/AllPrintings.json
-datasets/CommanderCards.json
-datasets/DecksSimple.json
-datasets/TaggingLabels.json
+datasets/parsed_cards.json
 datasets/variants.json
 
 #Unimportant Files
@@ -35,5 +33,6 @@ test.py
 
 #Unimportant Folders
 dataset_builders/
+documentation/
 tests/
 text/

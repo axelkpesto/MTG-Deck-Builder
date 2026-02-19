@@ -23,9 +23,7 @@ def build_dataset() -> pd.DataFrame:
     with open(CONFIG.datasets["CARDS_DATASET_PATH"], "r", encoding="utf-8") as f:
         data = json.load(f)
 
-    print(len(data))
     card_lookup = {card['card_name']: card.get("tags", []) for card in data}
-    print(f"Loaded {len(card_lookup)} cards with tags.") #Issue here is its only grabbing a certain amount of cards?
     
     rows = []
     for name, vec in vd.items():
@@ -35,12 +33,9 @@ def build_dataset() -> pd.DataFrame:
             vec = vec.cpu().numpy()
         vec = np.asarray(vec, dtype=np.float32)
         rows.append({"name": name, "vector": vec, "tags": card_lookup.get(name, [])})
-    
-    print(f"Built dataset with {len(rows)}")
-    print(f"Keys: {list(rows[0]['tags']) if len(rows) > 0 else 'N/A'}")
     return pd.DataFrame(rows)
 
-def prepare_xy(df: pd.DataFrame, test_size: float = 0.2, random_state: int = 42):
+def prepare_dataset(df: pd.DataFrame, test_size: float = 0.2, random_state: int = 42):
     X = df['vector']
     y: list[list[str]] = df['tags'].apply(lambda t: t if isinstance(t, list) else []).tolist()
     names = df['name'].tolist()
@@ -55,7 +50,6 @@ def prepare_xy(df: pd.DataFrame, test_size: float = 0.2, random_state: int = 42)
     y_test  = mlb.transform(y_test_raw).astype(np.float32)
 
     return X_train, X_test, y_train, y_test, mlb, names_test
-
 
 class VectorsDataset(Dataset):
     def __init__(self, X: np.ndarray, y: np.ndarray):
@@ -76,8 +70,7 @@ class MLP(nn.Module):
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         return self.net(x)
 
-
-def train_torch(model: nn.Module, train_loader: DataLoader, val_loader: DataLoader, epochs: int = 20, lr: float = 1e-3, use_amp: bool = True):
+def train(model: nn.Module, train_loader: DataLoader, val_loader: DataLoader, epochs: int = 20, lr: float = 1e-3, use_amp: bool = True):
     model.to(device)
     criterion = nn.BCEWithLogitsLoss()
     optimizer = torch.optim.Adam(model.parameters(), lr=lr)
@@ -117,7 +110,7 @@ def train_torch(model: nn.Module, train_loader: DataLoader, val_loader: DataLoad
         print(f"Epoch {epoch:02d} | train_loss={train_loss:.4f} | val_loss={val_loss:.4f}")
 
 @torch.no_grad()
-def evaluate_torch(model: nn.Module, X_test: np.ndarray, y_test: np.ndarray, class_names: list[str], threshold: float = 0.5, batch_size: int = 2048):
+def evaluate(model: nn.Module, X_test: np.ndarray, y_test: np.ndarray, class_names: list[str], threshold: float = 0.5, batch_size: int = 2048):
     model.eval()
     model.to(device)
 
@@ -146,38 +139,6 @@ def evaluate_torch(model: nn.Module, X_test: np.ndarray, y_test: np.ndarray, cla
 
     print("\nPer-class classification report:")
     print(classification_report(y_test, y_pred, target_names=list(class_names), zero_division=0))
-
-@torch.no_grad()
-def print_example_predictions(model: nn.Module, X_test: np.ndarray, y_test: np.ndarray, test_names: list[str], class_names: list[str], k: int = 8, threshold: float = 0.5):
-    if k <= 0: return
-    model.eval()
-    model.to(device)
-
-    k = min(k, len(X_test))
-    idxs = np.random.choice(len(X_test), size=k, replace=False)
-
-    xb = torch.from_numpy(X_test[idxs]).to(device)
-    logits = model(xb)
-    probs = torch.sigmoid(logits).float().cpu().numpy()
-
-    for row, idx in enumerate(idxs):
-        name = test_names[idx]
-        true_idxs = np.where(y_test[idx] == 1)[0]
-        pred_idxs = np.where(probs[row] >= threshold)[0]
-        
-        outliers = list(set(true_idxs).symmetric_difference(set(pred_idxs)))
-
-        true_tags = [class_names[j] for j in true_idxs.tolist()]
-        pred_tags = [f"{class_names[j]} ({probs[row][j]:.2f})" for j in pred_idxs.tolist()]
-
-        if len(pred_tags) == 0:
-            top3 = probs[row].argsort()[-3:][::-1]
-            pred_tags = [f"{class_names[j]} ({probs[row][j]:.2f})" for j in top3]
-
-        print(f"\n• {name}")
-        print(f"  True tags: {true_tags}")
-        print(f"  Predicted (@{threshold:.2f}): {pred_tags}")
-        print(f"  Outliers: {[class_names[j] for j in outliers]}")
 
 def save_model(model: nn.Module, mlb: MultiLabelBinarizer, path: str, model_kwargs: dict):
     os.makedirs(os.path.dirname(path), exist_ok=True)
@@ -221,7 +182,7 @@ def main():
     df = build_dataset()
     df = df.sample(frac=1, random_state=(args.seed)).reset_index(drop=True)
 
-    X_train, X_test, y_train, y_test, mlb, names_test = prepare_xy(df, test_size=0.2, random_state=args.seed)
+    X_train, X_test, y_train, y_test, mlb, _ = prepare_dataset(df, test_size=0.2, random_state=args.seed)
 
     if args.load:
         model, _ = load_model(args.load_path)
@@ -233,12 +194,10 @@ def main():
 
         train_loader = DataLoader(train_ds, batch_size=args.batch_size, shuffle=True, num_workers=0, pin_memory=(device.type == 'cuda'))
         val_loader = DataLoader(test_ds, batch_size=args.batch_size, shuffle=False, num_workers=0, pin_memory=(device.type == 'cuda'))
-        train_torch(model, train_loader=train_loader, val_loader=val_loader, epochs=args.epochs, lr=args.lr, use_amp=args.amp)
+        train(model, train_loader=train_loader, val_loader=val_loader, epochs=args.epochs, lr=args.lr, use_amp=args.amp)
 
-    evaluate_torch(model, X_test=X_test, y_test=y_test, class_names=mlb.classes_, threshold=args.threshold)
-    
-    print_example_predictions(model, X_test=X_test, y_test=y_test, test_names=names_test, class_names=list(mlb.classes_), k=args.show_n, threshold=args.threshold)
-    
+    evaluate(model, X_test=X_test, y_test=y_test, class_names=mlb.classes_, threshold=args.threshold)
+        
     if args.save:
         model_kwargs = {
             "input_dim": X_train.shape[1],
