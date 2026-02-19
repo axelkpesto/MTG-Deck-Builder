@@ -1,8 +1,8 @@
-from card_data.Card_Fields import CardFields
 import numpy as np
 import torch
 import torch.nn.functional as F
 from typing import Dict, List, Optional
+from card_data.Card_Fields import CardFields
 
 class CardDecoder(object):
     def __init__(self, embed_dim: Optional[int] = 686):
@@ -122,13 +122,3 @@ class CardDecoder(object):
         mana_slice_start, mana_slice_end = self.slice_map["mana"]
         mv = node_features[:, mana_slice_start:mana_slice_end].squeeze(-1)
         return torch.clamp(mv, min=0.0, max=30.0)
-    
-    def allowed_basic_types_from_commander_colors(cmd_colors: torch.Tensor) -> List[str]:
-        colors = set()
-        for i, c in enumerate(CardFields.color_identities()):
-            if c == "C":
-                continue
-            if bool(cmd_colors[i].item()):
-                colors.add(c)
-        colors = [CardFields.color_basic_land_map()[c] for c in colors]
-        return colors if colors else ["Wastes"]

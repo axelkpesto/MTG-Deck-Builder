@@ -1,7 +1,8 @@
-from card_data.Card import Card
 import re
-from typing import Dict, Callable
 import numpy as np
+from typing import Dict, Callable
+
+from card_data.Card import Card
 
 class CardFields(object):
     __tags_general = {

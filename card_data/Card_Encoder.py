@@ -1,8 +1,9 @@
-from sentence_transformers import SentenceTransformer
-from card_data.Card import Card
-from card_data.Card_Fields import CardFields
 import numpy as np
 from typing import Optional, Tuple
+
+from card_data.Card import Card
+from card_data.Card_Fields import CardFields
+from sentence_transformers import SentenceTransformer
 
 class CardEncoder(object):
     def __init__(self, embed_model_name: Optional[str] ="all-MiniLM-L6-v2"):

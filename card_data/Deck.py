@@ -1,14 +1,12 @@
-from .Card import Card
-from .Card_Fields import CardFields
-from .Card_Decoder import CardDecoder
-import torch
-import json
-from typing import List, Tuple, Dict, Any, Optional
-from collections import defaultdict
 import torch
 import json
 from dataclasses import dataclass
+from collections import defaultdict
+from typing import List, Tuple, Dict, Any
 
+from .Card import Card
+from .Card_Fields import CardFields
+from .Card_Decoder import CardDecoder
 
 class Deck(object):
     def __init__(self, id: str, colors: List[str], color_percentages: Dict[str, float], bracket: int, format: str, commanders: List[Card], companions: List[Card], mainboard_count: int, cards: List[Tuple[Card, int]]) -> None:

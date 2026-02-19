@@ -114,7 +114,7 @@ def load_simple_decks(path: str) -> Dict[str, SimpleDeck]:
             continue
     return out
 
-def build_simple_decks(*, start_page: int = 1, end_page: int = 50, out_path: str = DEFAULT_OUT_PATH, seed_existing: bool = True, cfg: Optional[FetchConfig] = None) -> Dict[str, SimpleDeck]:
+def build_simple_decks(start_page: int = 1, end_page: int = 50, out_path: str = DEFAULT_OUT_PATH, seed_existing: bool = True, cfg: Optional[FetchConfig] = None) -> Dict[str, SimpleDeck]:
     cfg = cfg or FetchConfig()
 
     decks: Dict[str, SimpleDeck] = load_simple_decks(out_path) if seed_existing else {}
