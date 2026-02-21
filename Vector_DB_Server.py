@@ -1,4 +1,5 @@
 import os, time
+import json
 
 import logging
 from dotenv import load_dotenv
@@ -10,6 +11,8 @@ from flask_limiter.util import get_remote_address
 from Vector_Database import VectorDatabase
 from Tagging_Model import load_model
 from firestore.Firestore_Connector import authenticate_api_key, touch_last_used
+from deckgen import DeckGenBundle, DeckGenPaths
+from card_data import SimpleDeck, SimpleDeckAnalyzer
 from config import CONFIG
 
 import torch
@@ -32,6 +35,10 @@ except Exception as e:
     print(f"Error loading tagging model: {e}")
 
 vd = VectorDatabase.load_static(CONFIG.datasets["VECTOR_DATABASE_PATH"])
+with open(CONFIG.datasets["TAGS_DATASET_PATH"], "r", encoding="utf-8") as f:
+    tag_dataset = json.load(f)
+
+gen = DeckGenBundle.load(paths=DeckGenPaths(), device=device, vector_db=vd)
 
 limiter = Limiter(
     app=app,
@@ -130,7 +137,8 @@ def help():
             "/get_random_vector_description": "Get the description for a random vector from the database",
             "/get_similar_vectors/STR?num_vectors=INT": "Get the most similar vectors to the given id, num_vectors is optional and defaults to 5",
             "/get_tags/STR?threshold=FLOAT&top_k=INT": "Get the tags for the given id, threshold and top_k are optional and default to 0.5 and 8 respectively",
-            "/get_tags_from_vector": {"method": "POST", "body": {"vector": [float, ...], "threshold": float, "top_k": int}, "description": "Get the tags for the given vector, threshold and top_k are optional and default to 0.5 and 8 respectively"}
+            "/get_tags_from_vector": {"method": "POST", "body": {"vector": ["number", "..."], "threshold": 0.5, "top_k": 8}, "description": "Get the tags for the given vector, threshold and top_k are optional and default to 0.5 and 8 respectively"},
+            "/analyze_deck": {"method": "POST", "body": {"commander": "Card Name", "cards": ["Card Name", "..."]}, "description": "Analyze a deck and return SimpleDeckAnalyzer metrics."}
         }
     })
 
@@ -144,7 +152,8 @@ def examples():
             "/get_random_vector_description": "Get the description for a random vector from the database",
             "/get_similar_vectors/Magnus the Red?num_vectors=10": "Get the most similar vectors to the given id, num_vectors is optional and defaults to 5",
             "/get_tags/Magnus the Red?threshold=0.5&top_k=8": "Get the tags for the given id, threshold and top_k are optional and default to 0.5 and 8 respectively",
-            "/get_tags_from_vector": {"method": "POST", "body": {"vector": [float, ...], "threshold": 0.5, "top_k": 8}, "description": "Get the tags for the given vector, threshold and top_k are optional and default to 0.5 and 8 respectively"}
+            "/get_tags_from_vector": {"method": "POST", "body": {"vector": ["number", "..."], "threshold": 0.5, "top_k": 8}, "description": "Get the tags for the given vector, threshold and top_k are optional and default to 0.5 and 8 respectively"},
+            "/analyze_deck": {"method": "POST", "body": {"commander": "Magnus the Red", "cards": ["Sol Ring", "Island", "Mountain"]}, "description": "Analyze a deck list and return deck statistics."}
         }
     })
 
@@ -263,6 +272,39 @@ def get_tags_from_vector():
     threshold = clamp_float(threshold, 0.0, 1.0)
     top_k = clamp_int(top_k, 1, 1000)
     return jsonify(predict_from_vector(vec_np, threshold, top_k))
+
+@app.route('/generate_deck/<string:v_id>', methods=['GET'])
+@limiter.limit(set_limit)
+def generate_deck(v_id):
+    try:
+        card = vd.find_id(format_id(v_id))
+    except KeyError:
+        return error("id not found", 400, requested_id=v_id)
+
+    return jsonify(gen.generate(card))
+
+@app.route('/analyze_deck', methods=['POST'])
+@limiter.limit(set_limit)
+def analyze_deck():
+    data = request.get_json(silent=True) or {}
+    commander = data.get("commander")
+    cards = data.get("cards")
+
+    if not isinstance(commander, str) or not commander.strip():
+        return error("JSON body must include 'commander': 'Card Name'", 400, received=data)
+    if not isinstance(cards, list) or not all(isinstance(c, str) for c in cards):
+        return error("JSON body must include 'cards': ['Card Name', ...]", 400, received=data)
+
+    deck = SimpleDeck.from_json(
+        {
+            "id": "",
+            "commanders": [commander.strip()],
+            "cards": [c.strip() for c in cards if c.strip()],
+        }
+    )
+    
+    analyzer = SimpleDeckAnalyzer(deck=deck, tag_dataset=tag_dataset, vd=vd)
+    return jsonify(analyzer.analyze())
 
 def format_id(v_id: str) -> str:
     transition_words = {'of', 'the', 'in', 'on', 'at', 'to', 'for', 'and', 'but', 'or', 'nor'}
