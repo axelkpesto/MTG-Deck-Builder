@@ -2,8 +2,8 @@ import os
 from datetime import datetime, timedelta, timezone
 from google.cloud import firestore
 
-from firestore.Firebase_Auth import validate_api_key as validate_firebase_api_key
-from firestore.Firebase_Auth import generate_api_key as generate_firebase_api_key
+from Firebase_Auth import validate_api_key as validate_firebase_api_key
+from Firebase_Auth import generate_api_key as generate_firebase_api_key
 
 from dotenv import load_dotenv
 
@@ -72,4 +72,3 @@ def touch_last_used(api_key_id: str) -> None:
 if __name__ == "__main__":
     user_id = "unlimited_user"
     raw_key = create_api_key(user_id, rate_limit="unlimited")
-    print(f"Generated API Key: {raw_key}")

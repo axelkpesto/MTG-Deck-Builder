@@ -239,18 +239,12 @@ class SimpleDeckAnalyzer(object):
         return {"colors": {"counts": counts, "percent": percent}}
 
     def analyze_curve(self, prep: PreparedDeckData) -> Dict[str, Any]:
-        """
-        Fast mana curve:
-          - bucket = round(mv), clamp into [0..6] where 6 means "6+"
-          - use torch.bincount to count per-bucket (no Python loop over cards)
-        """
         M = int(prep.X.size(0)) if prep.X.numel() else 0
         if prep.mana_value.numel() == 0:
             curve = [0] * 7
             curve_pct = [0.0] * 7
             return {"mana_curve": {"counts": curve, "percent": curve_pct}}
 
-        # Keep computation on whatever device mana_value is on.
         mv = prep.mana_value
         buckets = torch.round(mv).to(torch.int64)
         buckets = torch.clamp(buckets, min=0, max=6)

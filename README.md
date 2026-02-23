@@ -32,7 +32,6 @@ MTG-Deck-Builder/
   documentation/          # API schema docs
   firestore/              # API key auth integration
   models/                 # Saved ML checkpoints
-  tests/                  # Unit/integration tests
   Vector_DB_Server.py     # Flask API app
   Vector_Database.py      # Vector DB implementation
   Tagging_Model.py        # Tagging model training/inference
