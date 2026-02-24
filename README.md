@@ -115,22 +115,23 @@ Detailed schema: `documentation/vector_db_server_api.json`
 Common runtime variables:
 - `FLASK_DEBUG`
 - `DEFAULT_PORT`
-- `REDIS_URL` (rate-limiter backend)
-- `FIREBASE_API_KEY` / related auth config used by your Firestore key flow
+- `API_KEY` / API Key for Firebase Auth Check
 
-## Testing
-```bash
-pytest -q
-```
+## Public API Endpoint
+https://mtg-deckbuilder-api-891777334325.us-west2.run.app
+Please request an API key if interested in using API
 
 ## Deployment
 - Cloud Run config: `server.yaml`
 - Container build: `Dockerfile`
 
 ## Data attribution
-Card data originates from MTGJSON:
+Card data originates from MTGJSON and CommanderSpellbook:
 - https://mtgjson.com/downloads/all-files/
 - https://mtgjson.com/data-models/set/
 - https://mtgjson.com/data-models/card/card-set/
+- https://json.commanderspellbook.com/variants.json
+
+And a special thanks to the https://moxfield.com/ team for allowing data collection through their API. 
 
 All source data rights remain with their respective owners/providers.
