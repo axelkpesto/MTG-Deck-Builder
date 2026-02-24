@@ -19,7 +19,7 @@ It is designed as both a research sandbox and an API backend you can deploy.
 - `vector_database.py`: vector storage, lookup, similarity search, persistence
 - `tagging_model.py`: trains/loads a multi-label tag predictor
 - `deckgen/`: GNN model + generation logic (`DeckGenBundle` entrypoint)
-- `Vector_DB_Server.py`: Flask API exposing vectors, tags, generation, and deck analysis
+- `vector_db_server.py`: Flask API exposing vectors, tags, generation, and deck analysis
 - `card_data/`: card/deck data models and analyzers
 - `documentation/vector_db_server_api.json`: API spec
 
@@ -32,7 +32,7 @@ MTG-Deck-Builder/
   documentation/          # API schema docs
   firestore/              # API key auth integration
   models/                 # Saved ML checkpoints
-  Vector_DB_Server.py     # Flask API app
+  vector_db_server.py     # Flask API app
   vector_database.py      # Vector DB implementation
   tagging_model.py        # Tagging model training/inference
 ```
@@ -81,14 +81,14 @@ deck_counts, stats = bundle.generate(commander_name="Atraxa, Praetors' Voice")
 ## API server
 Run locally:
 ```bash
-python Vector_DB_Server.py
+python vector_db_server.py
 ```
 Server defaults:
 - Host: `0.0.0.0`
 - Port: `8080` (or `DEFAULT_PORT` env var)
 
 Production entrypoints:
-- `server.yaml`: `gunicorn -b :$PORT Vector_DB_Server:app`
+- `server.yaml`: `gunicorn -b :$PORT vector_db_server:app`
 - `Dockerfile`: containerized Gunicorn runtime
 
 ### Public API routes
