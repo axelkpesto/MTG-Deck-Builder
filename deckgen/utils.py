@@ -16,7 +16,7 @@ def safe_read_json(path: str) -> Any:
         raise FileNotFoundError(f"Missing file: {path}")
     with open(path, "r", encoding="utf-8") as f:
         return json.load(f)
-    
+
 
 def set_seed(seed: int) -> None:
     random.seed(seed)

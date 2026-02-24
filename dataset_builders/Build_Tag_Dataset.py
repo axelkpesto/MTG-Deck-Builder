@@ -1,5 +1,5 @@
-from Tagging_Model import load_model
-from Vector_Database import VectorDatabase
+from tagging_model import load_model
+from vector_database import VectorDatabase
 import json
 import torch
 import numpy as np

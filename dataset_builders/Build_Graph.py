@@ -1,3 +1,5 @@
+"""Build graph node/edge tensors from deck, combo, and tag datasets."""
+
 import json
 import math
 import heapq
@@ -8,13 +10,15 @@ from typing import Dict, List, Tuple, Any
 
 import torch
 
-from Vector_Database import VectorDatabase
+from vector_database import VectorDatabase
 from card_data import CardFields
 
 from config import CONFIG
 
 @dataclass(frozen=True)
 class Config:
+    """Runtime configuration for graph construction inputs and outputs."""
+
     decks_path: str = CONFIG.datasets["DECKS_DATASET_PATH"]
     variants_path: str = CONFIG.datasets["COMBO_DATASET_PATH"]
     tags_path: str = CONFIG.datasets["TAGS_DATASET_PATH"]
@@ -41,6 +45,8 @@ EDGE_FEATURES = [
 
 
 def _safe_int(x: Any, default: int = 10**9) -> int:
+    """Best-effort integer conversion with a fallback default."""
+
     try:
         if x is None:
             return default
@@ -52,11 +58,13 @@ def _safe_int(x: Any, default: int = 10**9) -> int:
         if s == "" or s.lower() == "none":
             return default
         return int(float(s))
-    except Exception:
+    except (TypeError, ValueError, OverflowError):
         return default
 
 
 def load_commander_cards(path: str) -> Dict[str, Dict[str, Any]]:
+    """Load commander card metadata keyed by card name from JSON."""
+
     try:
         with open(path, "r", encoding="utf-8") as f:
             data = json.load(f)
@@ -81,14 +89,15 @@ def load_commander_cards(path: str) -> Dict[str, Dict[str, Any]]:
 
 
 def co_occurance_graph(deck_card_lists: List[List[str]], min_deck_occurrences: int) -> Dict[str, Dict[str, int]]:
+    """Build a weighted undirected co-occurrence graph from deck lists."""
+
     cooccur_counter = Counter()
 
     for deck in deck_card_lists:
         counts = Counter(deck)
 
         unique = sorted(counts.keys())
-        for i in range(len(unique)):
-            a = unique[i]
+        for i, a in enumerate(unique):
             ca = counts[a]
             for j in range(i + 1, len(unique)):
                 b = unique[j]
@@ -105,6 +114,8 @@ def co_occurance_graph(deck_card_lists: List[List[str]], min_deck_occurrences: i
 
 
 def commander_co_occurance(decks_obj: Dict[str, Any], min_deck_occurrences: int) -> Dict[str, Dict[str, int]]:
+    """Map each commander to cards that frequently appear in its decks."""
+
     graph = defaultdict(dict)
     commander_deck_map = defaultdict(list)
 
@@ -128,6 +139,8 @@ def commander_co_occurance(decks_obj: Dict[str, Any], min_deck_occurrences: int)
 
 
 def combo_graph(variants: Dict[str, Any]) -> Dict[str, Dict[str, int]]:
+    """Build a combo co-usage graph from combo variant records."""
+
     graph = defaultdict(dict)
 
     for combo in variants.get("results", []):
@@ -161,6 +174,8 @@ def combo_graph(variants: Dict[str, Any]) -> Dict[str, Dict[str, int]]:
 
 
 def tag_graph(tag_data: Dict[str, Dict], min_common: int = 2, max_cards_per_tag: int = 3000) -> Dict[str, Dict[str, int]]:
+    """Build graph edges for cards that share the same tags."""
+
     tag_to_cards = defaultdict(list)
     for card, payload in tag_data.items():
         for tag in payload.get("tags", []):
@@ -183,7 +198,9 @@ def tag_graph(tag_data: Dict[str, Dict], min_common: int = 2, max_cards_per_tag:
     return graph
 
 
-def synergy_tag_graph(tag_data: Dict[str, Dict], min_common: int = 1, max_cards_per_tag: int = 3000) -> Dict[str, Dict[str, int]]:
+def synergy_tag_graph(tag_data: Dict[str, Dict], min_common: int = 1, max_cards_per_tag: int = 3000) -> Dict[str, Dict[str, int]]:  # pylint: disable=too-many-branches
+    """Build directed edges from tags to cards that match synergistic tags."""
+
     tag_to_cards = defaultdict(list)
     for card, payload in tag_data.items():
         for tag in payload.get("tags", []):
@@ -223,6 +240,8 @@ def synergy_tag_graph(tag_data: Dict[str, Dict], min_common: int = 1, max_cards_
 
 
 def build_edge_tensors(node_to_idx: Dict[str, int], cooccur_graph: Dict[str, Dict[str, int]], combo_graph_data: Dict[str, Dict[str, int]], tag_graph_data: Dict[str, Dict[str, int]], synergy_tag_data: Dict[str, Dict[str, int]], commander_graph: Dict[str, Dict[str, int]], topk_per_node: int) -> Tuple[torch.Tensor, torch.Tensor]:
+    """Merge edge sources and features into `edge_index` and `edge_attr` tensors."""
+
     src_list: List[int] = []
     dst_list: List[int] = []
     feat_list: List[List[float]] = []
@@ -277,6 +296,8 @@ def build_edge_tensors(node_to_idx: Dict[str, int], cooccur_graph: Dict[str, Dic
 
 
 def main():
+    """Run the graph build pipeline and persist node/edge tensor artifacts."""
+
     cfg = Config()
 
     with open(cfg.decks_path, "r", encoding="utf-8") as f:
@@ -363,10 +384,7 @@ def main():
         commander_graph=commander_graph,
         topk_per_node=cfg.topk_per_node,
     )
-
-    print(f"[OK] edge_index shape: {tuple(edge_index.shape)}")
-    print(f"[OK] edge_attr  shape: {tuple(edge_attr.shape)}")
-
+    
     torch.save(
         {"node_names": node_names, "node_to_idx": node_to_idx, "node_meta": node_meta},
         cfg.out_nodes_pt,
@@ -376,8 +394,8 @@ def main():
         cfg.out_edges_pt,
     )
 
-    print(f"[OK] wrote nodes: {cfg.out_nodes_pt}")
-    print(f"[OK] wrote edges: {cfg.out_edges_pt}")
+    print(f"Wrote nodes: {cfg.out_nodes_pt}")
+    print(f"Wrote edges: {cfg.out_edges_pt}")
 
 
 if __name__ == "__main__":

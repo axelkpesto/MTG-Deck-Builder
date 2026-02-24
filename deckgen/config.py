@@ -1,3 +1,5 @@
+"""Configuration dataclasses for deck generation and training."""
+
 from dataclasses import dataclass, field
 from typing import Tuple
 from config import CONFIG
@@ -5,6 +7,8 @@ from config import CONFIG
 
 @dataclass(frozen=True)
 class TagPenalty:
+    """Penalty schedule for a single gameplay tag count target range."""
+
     tag: str
     min_target: int
     max_target: int
@@ -15,6 +19,8 @@ class TagPenalty:
 
 @dataclass(frozen=True)
 class DeckGenPaths:
+    """Filesystem paths used by deck generation runtime."""
+
     nodes_pt: str = CONFIG.datasets["GRAPH_NODES_DATA_PATH"]
     edges_pt: str = CONFIG.datasets["GRAPH_EDGES_DATA_PATH"]
     vectors_pt: str = CONFIG.datasets["VECTOR_DATABASE_PATH"]
@@ -25,6 +31,8 @@ class DeckGenPaths:
 
 @dataclass(frozen=True)
 class GenConfig:
+    """Generation-time hyperparameters and target constraints."""
+
     deck_size: int = 100
     temperature: float = 0.85
     top_k: int = 512
@@ -105,6 +113,8 @@ class GenConfig:
 
 @dataclass(frozen=True)
 class DeckTrainConfig:
+    """Training hyperparameters for the deck generation model."""
+
     seed: int = 7
     epochs: int = 5
     steps_per_epoch: int = 3000

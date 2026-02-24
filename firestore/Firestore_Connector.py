@@ -1,20 +1,23 @@
+"""Firestore connector utilities for API-key lifecycle operations."""
+
 import os
 from datetime import datetime, timedelta, timezone
 from google.cloud import firestore
-
-from Firebase_Auth import validate_api_key as validate_firebase_api_key
-from Firebase_Auth import generate_api_key as generate_firebase_api_key
-
 from dotenv import load_dotenv
+
+from .Firebase_Auth import validate_api_key as validate_firebase_api_key
+from .Firebase_Auth import generate_api_key as generate_firebase_api_key
 
 load_dotenv()
 
 def get_firestore_client(project_id: str | None = None) -> firestore.Client:
+    """Return a Firestore client for the configured or provided project."""
     return firestore.Client(project=project_id)
 
 db = get_firestore_client(project_id=os.environ.get("PROJECT_ID"))
 
 def create_api_key(user_id: str, rate_limit: str = "60/minute", prefix_len: int = 8) -> str:
+    """Create and persist a new API key record; return the raw key."""
     raw, prefix, key_hash = generate_firebase_api_key(prefix_len)
 
     now = datetime.now(timezone.utc)
@@ -32,6 +35,7 @@ def create_api_key(user_id: str, rate_limit: str = "60/minute", prefix_len: int 
     return raw
 
 def authenticate_api_key(raw_key: str) -> dict | None:
+    """Validate a raw key and return auth metadata when valid."""
     if not raw_key or len(raw_key) < 8:
         return None
 
@@ -66,9 +70,10 @@ def authenticate_api_key(raw_key: str) -> dict | None:
     }
 
 def touch_last_used(api_key_id: str) -> None:
+    """Update the last-used timestamp for a key document."""
     doc_ref = db.collection("api_keys").document(api_key_id)
     doc_ref.update({"last_used_at": datetime.now(timezone.utc)})
 
 if __name__ == "__main__":
     user_id = "unlimited_user"
-    raw_key = create_api_key(user_id, rate_limit="unlimited")
+    _raw_key = create_api_key(user_id, rate_limit="unlimited")

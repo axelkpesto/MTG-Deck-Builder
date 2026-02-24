@@ -1,0 +1,21 @@
+[MASTER]
+ignore=venv
+
+[MESSAGES CONTROL]
+disable=
+    line-too-long,
+    too-many-public-methods,
+    too-many-arguments,
+    too-many-positional-arguments,
+    too-many-locals,
+    too-many-instance-attributes,
+    too-few-public-methods
+
+[FORMAT]
+max-line-length=200
+max-args = 10
+max-locals = 20
+max-branches = 15
+max-statements = 75
+max-returns = 8
+max-attributes = 12

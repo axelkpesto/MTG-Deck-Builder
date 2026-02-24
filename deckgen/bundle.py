@@ -1,16 +1,20 @@
+"""Bundle model loading, assets, and deck generation utilities."""
+
 from __future__ import annotations
 
 from typing import Dict, Optional, Tuple
 
 import torch
 
-from Vector_Database import VectorDatabase
+from vector_database import VectorDatabase
 from deckgen.assets import DeckGenAssets, load_assets
 from deckgen.config import DeckGenPaths, GenConfig
 from deckgen.generator import generate_deck
 from deckgen.model import CommanderDeckGNN
 
 class DeckGenBundle:
+    """Runtime bundle containing model, assets, and generation config."""
+
     def __init__(self, model: CommanderDeckGNN, assets: DeckGenAssets, gen: GenConfig, device: torch.device, node_embeddings: Optional[torch.Tensor] = None) -> None:
         self.model = model
         self.assets = assets
@@ -20,6 +24,7 @@ class DeckGenBundle:
 
     @classmethod
     def load(cls, paths: Optional[DeckGenPaths] = None, gen: Optional[GenConfig] = None, device: str = "cpu", vector_db: Optional[VectorDatabase] = None) -> "DeckGenBundle":
+        """Load assets and a trained checkpoint into a ready-to-use bundle."""
         dev = torch.device(device)
         paths = paths or DeckGenPaths()
         gen = gen or GenConfig()
@@ -46,12 +51,14 @@ class DeckGenBundle:
 
     @torch.inference_mode()
     def get_node_embeddings(self) -> torch.Tensor:
+        """Compute and cache node embeddings for reuse across generations."""
         if self.node_embeddings is None:
             self.node_embeddings = self.model.encode(self.assets.graph.x, self.assets.graph.edge_index, self.assets.graph.edge_attr)
         return self.node_embeddings
 
 
     def generate(self, commander_name: str, allow_duplicates: bool = False) -> Tuple[Dict[str, int], Dict[str, object]]:
+        """Generate a deck list and diagnostics for a given commander name."""
         node_embeddings = self.get_node_embeddings()
 
         return generate_deck(

@@ -1,6 +1,10 @@
+"""Card data model used by dataset builders and vector tooling."""
+
 import json
 
-class Card(object):
+class Card:
+    """Serializable MTG card representation used across the project."""
+
     def __init__(self, commander_legal: bool, card_name: str, card_types: list[str], card_supertypes: str, card_subtypes: list[str], mana_cost: int, mana_cost_exp: str, color_identity: list[str], defense: str, rarity: str, text: str, rank: str, power: str, toughness: str, loyalty: str, id: str) -> None:
         self.commander_legal: bool = bool(commander_legal) #Is the Card Legal in Commander? True if property exists and is legal, False otherwise.
         self.card_name: str = card_name #Name of the Card. None if property doesn't exist.
@@ -29,12 +33,13 @@ class Card(object):
 
     def __hash__(self) -> int:
         return hash(self.rank)
-    
+
     def __len__(self) -> int:
         return 1
-    
+
     def tags(self) -> list[str]:
-        from card_data.Card_Fields import CardFields
+        """Return derived tags for this card."""
+        from card_data.card_fields import CardFields
         return CardFields.tag_card(self)
 
     def get_attributes(self) -> dict:
@@ -66,7 +71,7 @@ class Card(object):
     def to_json(self) -> str:
         """
         Converts the Card object into a JSON string.
-        
+
         return: A JSON string representing the Card object.
         """
         return json.dumps(self.get_attributes(), indent=4)

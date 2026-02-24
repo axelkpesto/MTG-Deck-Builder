@@ -1,23 +1,30 @@
-import torch
+"""Deck data models and analysis helpers."""
+
 import json
-from dataclasses import dataclass
 from collections import defaultdict
+from dataclasses import dataclass
 from typing import List, Tuple, Dict, Any
 
-from .Card import Card
-from .Card_Fields import CardFields
-from .Card_Decoder import CardDecoder
+import torch
 
-class Deck(object):
-    def __init__(self, id: str, colors: List[str], color_percentages: Dict[str, float], bracket: int, format: str, commanders: List[Card], companions: List[Card], mainboard_count: int, cards: List[Tuple[Card, int]]) -> None:
-        self.id: str = id
+from .card import Card
+from .card_decoder import CardDecoder
+from .card_fields import CardFields
+
+
+class Deck:
+    """Deck container for fully decoded card objects."""
+
+    def __init__(self, deck_id: str | None, colors: List[str], color_percentages: Dict[str, float], bracket: int, deck_format: str | None, commanders: List[Card], companions: List[Card], mainboard_count: int, cards: List[Tuple[Card, int]]) -> None:
+        """Initialize a deck model from structured card objects."""
+        self.id: str = deck_id
         self.colors: List[str] = colors
         self.color_percentages: Dict[str, float] = color_percentages
         self.bracket: int = bracket
         self.mainboard_count: int = mainboard_count
         self.cards: List[Tuple[Card, int]] = cards
         self.cards_expanded: List[Card] = [card for card, count in self.cards for _ in range(count)]
-        self.format: str = format
+        self.format: str = deck_format
         self.commanders: List[Card] = commanders
         self.companions: List[Card] = companions
         self.all_cards = self.commanders + self.companions + self.cards_expanded
@@ -29,11 +36,13 @@ class Deck(object):
 
     def __str__(self) -> str:
         return f"id: {self.id}\ncolors: {self.colors}\ncolor_percentages: {self.color_percentages}\nbracket: {self.bracket}\ncommander: {[commander.card_name for commander in self.commanders]}\ncompanion: {[companion.card_name for companion in self.companions]}\ncards: {[(card.card_name, quantity) for card, quantity in self.cards[:5]]}...\nmainboard_count: {self.mainboard_count}\n"
-    
+
     def __len__(self) -> int:
-        return sum([qty for _, qty in self.cards])+len(self.commanders)+len(self.companions)
-    
+        """Return total deck size including commanders/companions."""
+        return sum(qty for _, qty in self.cards) + len(self.commanders) + len(self.companions)
+
     def get_attributes(self) -> Dict:
+        """Serialize deck to a plain dictionary."""
         return {
             'id': self.id,
             'colors': self.colors,
@@ -45,14 +54,17 @@ class Deck(object):
             'mainboard_count': self.mainboard_count,
             'cards': [{'card':card.get_attributes(), 'quantity': qty} for card, qty in self.cards],
         }
-    
+
     def to_json(self) -> str:
+        """Serialize deck to formatted JSON."""
         return json.dumps(self.get_attributes(), indent=4)
-    
+
     def to_tensor(self, encoder) -> torch.Tensor:
+        """Encode all cards in the deck into a stacked tensor."""
         return torch.stack([torch.tensor(encoder.encode(x)[1], dtype=torch.float32) for x in self.all_cards])
-    
+
     def shape_deck(self, commander_colors: List[str]) -> None:
+        """Pad or trim deck cards to 99 entries using basics."""
         if len(self.cards) >= 99:
             self.cards = self.cards[:99]
             return
@@ -62,56 +74,70 @@ class Deck(object):
 
     @staticmethod
     def basic_lands_from_colors(colors: List[str]) -> List[str]:
+        """Map deck colors to recommended basic land names."""
         return [CardFields.color_basic_land_map()[color] for color in colors if color in CardFields.color_basic_land_map()]
-    
-class SimpleDeck(object):
-    def __init__(self, id: str, commanders: List[str], cards: List[str]) -> None:
-        self.id: str = id
-        self.commanders: List[str] = commanders
-        self.cards: List[str] = cards
+
+class SimpleDeck:
+    """Lightweight deck model using only card names."""
+
+    def __init__(self, deck_id: str | None = None, commanders: List[str] | None = None, cards: List[str] | None = None) -> None:
+        """Initialize simple deck structure from card names."""
+        self.id: str = deck_id
+        self.commanders: List[str] = commanders or []
+        self.cards: List[str] = cards or []
 
     def __str__(self) -> str:
         return f"id: {self.id}\ncommanders: {self.commanders}\ncards: {self.cards}\n"
-    
+
     def get_attributes(self) -> Dict:
+        """Serialize simple deck to a plain dictionary."""
         return {
             'id': self.id,
             'commanders': self.commanders,
             'cards': self.cards,
         }
-    
+
     def to_json(self) -> str:
+        """Serialize simple deck to formatted JSON."""
         return json.dumps(self.get_attributes(), indent=4)
 
     def to_tensor_stack(self, vd) -> torch.Tensor:
+        """Stack vectors for all known cards in the simple deck."""
         vecs = []
         for name in (self.commanders + self.cards):
             try:
                 vecs.append(vd.find_vector(vd.find_id(name)).float())
-            except Exception:
+            except (KeyError, AttributeError, RuntimeError, TypeError, ValueError):
                 continue
         return torch.stack(vecs, dim=0)
-    
+
     @staticmethod
     def from_json(obj: Dict) -> 'SimpleDeck':
-        return SimpleDeck(id=str(obj["id"]), commanders=list(obj["commanders"]), cards=list(obj.get("cards", [])))
+        """Build `SimpleDeck` from JSON-compatible object."""
+        return SimpleDeck(
+            deck_id=str(obj["id"]),
+            commanders=list(obj["commanders"]),
+            cards=list(obj.get("cards", [])),
+        )
 
     @staticmethod
     def load_json_file(path: str) -> List["SimpleDeck"]:
+        """Load a list of `SimpleDeck` entries from a JSON file."""
         with open(path, "r", encoding="utf-8") as f:
             raw = json.load(f)
         items = raw.values() if isinstance(raw, dict) else raw
         return [SimpleDeck.from_json(x) for x in items]
-    
+
     def __len__(self) -> int:
         return len(self.cards) + len(self.commanders)
-    
+
     def __eq__(self, value: object) -> bool:
         if isinstance(value, SimpleDeck):
             return self.cards == value.cards and self.commanders == value.commanders
         return False
-    
+
     def shape_deck(self, commander_colors: List[str]) -> None:
+        """Pad or trim cards to 99 entries using basic lands."""
         if len(self.cards) >= 99:
             self.cards = self.cards[:99]
             return
@@ -121,13 +147,16 @@ class SimpleDeck(object):
 
     @staticmethod
     def basic_lands_from_colors(colors: List[str]) -> List[str]:
+        """List of Lands """
         return [CardFields.color_basic_land_map()[color] for color in colors if color in CardFields.color_basic_land_map()]
 
 @dataclass
 class PreparedDeckData:
+    """Precomputed vector/tags/features used by deck analyzers."""
+
     all_names: List[str]
     present_names: List[str]
-    X: torch.Tensor
+    vectors: torch.Tensor
     missing_vectors: List[str]
     tags_by_card: Dict[str, List[str]]
 
@@ -135,8 +164,11 @@ class PreparedDeckData:
     mana_value: torch.Tensor
     color_mask: torch.Tensor
 
-class SimpleDeckAnalyzer(object):
+class SimpleDeckAnalyzer:
+    """Analyze deck composition, colors, mana curve, and tags."""
+
     def __init__(self, deck: "SimpleDeck", tag_dataset: dict[str, dict[str, list]], vd):
+        """Initialize analyzer and cache prepared deck features."""
         self.deck = deck
         self.tag_data = tag_dataset
         self.vd = vd
@@ -148,6 +180,7 @@ class SimpleDeckAnalyzer(object):
         self.prepared_deck = self._prepare()
 
     def analyze(self):
+        """Return full analysis payload for the prepared deck."""
         out = {}
         out["tags"] = self.analyze_tags(self.prepared_deck)
         out["color_distribution"] = self.analyze_color_distribution(self.prepared_deck)
@@ -156,6 +189,7 @@ class SimpleDeckAnalyzer(object):
         return out
 
     def _get_tags(self, name: str) -> List[str]:
+        """Extract known tags for a card name from tag dataset."""
         payload = self.tag_data.get(name)
         if isinstance(payload, dict):
             tags = payload.get("tags", [])
@@ -164,6 +198,7 @@ class SimpleDeckAnalyzer(object):
         return []
 
     def _prepare(self) -> PreparedDeckData:
+        """Prepare deck vectors, masks, and tag lookup caches."""
         all_names = list(self.deck.commanders) + list(self.deck.cards)
 
         tags_by_card: Dict[str, List[str]] = {}
@@ -176,7 +211,7 @@ class SimpleDeckAnalyzer(object):
 
             try:
                 v = self.vd.find_vector(name)
-            except Exception:
+            except (KeyError, AttributeError, RuntimeError, TypeError, ValueError):
                 v = None
 
             if v is None:
@@ -187,20 +222,20 @@ class SimpleDeckAnalyzer(object):
             present_names.append(name)
 
         if len(vecs) == 0:
-            X = torch.empty((0, 0))
+            vectors = torch.empty((0, 0))
             land_mask = torch.empty((0,), dtype=torch.bool)
             mana_value = torch.empty((0,), dtype=torch.float32)
             color_mask = torch.empty((0, len(list(CardFields.color_identities()))), dtype=torch.bool)
         else:
-            X = torch.stack(vecs, dim=0)
-            land_mask = self.decoder.land_mask_from_vectors(X, threshold=0.5)
-            mana_value = self.decoder.mana_value_from_vectors(X)
-            color_mask = self.decoder.color_identity_mask_from_vectors(X, threshold=0.5)
+            vectors = torch.stack(vecs, dim=0)
+            land_mask = self.decoder.land_mask_from_vectors(vectors, threshold=0.5)
+            mana_value = self.decoder.mana_value_from_vectors(vectors)
+            color_mask = self.decoder.color_identity_mask_from_vectors(vectors, threshold=0.5)
 
         return PreparedDeckData(
             all_names=all_names,
             present_names=present_names,
-            X=X,
+            vectors=vectors,
             missing_vectors=missing_vectors,
             tags_by_card=tags_by_card,
             land_mask=land_mask,
@@ -209,6 +244,7 @@ class SimpleDeckAnalyzer(object):
         )
 
     def analyze_tags(self, prep: PreparedDeckData) -> Dict[str, Any]:
+        """Compute tag counts and normalized frequencies."""
         tag_counts = defaultdict(int)
 
         for _, tags in prep.tags_by_card.items():
@@ -224,6 +260,7 @@ class SimpleDeckAnalyzer(object):
         }
 
     def analyze_color_distribution(self, prep: PreparedDeckData) -> Dict[str, Any]:
+        """Compute color identity distribution across present vectors."""
         wanted = ["W", "U", "B", "R", "G"]
         color_idents = list(CardFields.color_identities())
         pos = {c: (color_idents.index(c) if c in color_idents else None) for c in wanted}
@@ -233,13 +270,14 @@ class SimpleDeckAnalyzer(object):
             p = pos[c]
             counts[c] = 0 if p is None or prep.color_mask.numel() == 0 else int(prep.color_mask[:, p].sum().item())
 
-        M = int(prep.X.size(0)) if prep.X.numel() else 0
-        percent = {c: counts[c] / max(1, M) for c in wanted}
+        total_cards = int(prep.vectors.size(0)) if prep.vectors.numel() else 0
+        percent = {c: counts[c] / max(1, total_cards) for c in wanted}
 
         return {"colors": {"counts": counts, "percent": percent}}
 
     def analyze_curve(self, prep: PreparedDeckData) -> Dict[str, Any]:
-        M = int(prep.X.size(0)) if prep.X.numel() else 0
+        """Compute 0-6+ mana curve counts and percentages."""
+        total_cards = int(prep.vectors.size(0)) if prep.vectors.numel() else 0
         if prep.mana_value.numel() == 0:
             curve = [0] * 7
             curve_pct = [0.0] * 7
@@ -252,10 +290,11 @@ class SimpleDeckAnalyzer(object):
         counts = torch.bincount(buckets, minlength=7)  # (7,)
         curve = counts.detach().cpu().tolist()
 
-        curve_pct = [c / max(1, M) for c in curve]
+        curve_pct = [c / max(1, total_cards) for c in curve]
         return {"mana_curve": {"counts": curve, "percent": curve_pct}}
 
     def analyze_lands_and_basics(self, prep: PreparedDeckData) -> Dict[str, Any]:
+        """Compute land totals and basic-land composition stats."""
         land_count = int(prep.land_mask.sum().item()) if prep.land_mask.numel() else 0
 
         basic_types: Dict[str, int] = {}
@@ -266,7 +305,7 @@ class SimpleDeckAnalyzer(object):
                 basic_count += 1
                 try:
                     t = CardFields.basic_type_name(nm)
-                except Exception:
+                except (KeyError, AttributeError, RuntimeError, TypeError, ValueError):
                     t = name
                 basic_types[t] = basic_types.get(t, 0) + 1
 

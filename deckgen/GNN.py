@@ -7,7 +7,7 @@ import torch
 import torch.nn.functional as F
 from torch_geometric.data import Data
 
-from Vector_Database import VectorDatabase
+from vector_database import VectorDatabase
 from card_data import CardDecoder, SimpleDeck, CardFields
 from deckgen.config import DeckGenPaths, DeckTrainConfig
 from deckgen.model import CommanderDeckGNN
@@ -267,7 +267,7 @@ def save_checkpoint(*, path: str, model: CommanderDeckGNN, train_cfg: DeckTrainC
         "model_state_dict": model.state_dict(),
         "train_cfg": train_cfg.__dict__,
     }
-    
+
     if node_embeddings is not None:
         payload["node_embeddings"] = node_embeddings.detach().cpu()
 

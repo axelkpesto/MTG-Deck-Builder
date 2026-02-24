@@ -16,8 +16,8 @@ This project combines multiple ML systems into one pipeline:
 It is designed as both a research sandbox and an API backend you can deploy.
 
 ## Core components
-- `Vector_Database.py`: vector storage, lookup, similarity search, persistence
-- `Tagging_Model.py`: trains/loads a multi-label tag predictor
+- `vector_database.py`: vector storage, lookup, similarity search, persistence
+- `tagging_model.py`: trains/loads a multi-label tag predictor
 - `deckgen/`: GNN model + generation logic (`DeckGenBundle` entrypoint)
 - `Vector_DB_Server.py`: Flask API exposing vectors, tags, generation, and deck analysis
 - `card_data/`: card/deck data models and analyzers
@@ -33,8 +33,8 @@ MTG-Deck-Builder/
   firestore/              # API key auth integration
   models/                 # Saved ML checkpoints
   Vector_DB_Server.py     # Flask API app
-  Vector_Database.py      # Vector DB implementation
-  Tagging_Model.py        # Tagging model training/inference
+  vector_database.py      # Vector DB implementation
+  tagging_model.py        # Tagging model training/inference
 ```
 
 ## Quickstart (local)
@@ -67,7 +67,7 @@ python test.py
 ## Using deck generation in Python
 ```python
 import torch
-from Vector_Database import VectorDatabase
+from vector_database import VectorDatabase
 from config import CONFIG
 from deckgen import DeckGenBundle, DeckGenPaths
 
