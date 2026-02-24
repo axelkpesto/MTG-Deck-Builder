@@ -1,12 +1,18 @@
+"""Model definitions for deck generation graph encoding and policy scoring."""
+
 from typing import Optional
 
 import torch
-import torch.nn as nn
+from torch import nn
 import torch.nn.functional as F
 from torch_geometric.nn import GCNConv
 
+
 class GlobalGraphEncoder(nn.Module):
+    """Graph encoder that maps node features to contextual node embeddings."""
+
     def __init__(self, in_dim: int, edge_dim: int, hidden_dim: int, node_dim: int, num_layers: int, dropout: float):
+        """Initialize encoder projections, edge weighting, and GCN stack."""
         super().__init__()
         self.dropout = float(dropout)
 
@@ -24,6 +30,7 @@ class GlobalGraphEncoder(nn.Module):
         self.output_projection = nn.Linear(hidden_dim, node_dim)
 
     def forward(self, x: torch.Tensor, edge_index: torch.Tensor, edge_attr: torch.Tensor) -> torch.Tensor:
+        """Encode graph nodes with edge-aware message passing."""
         h = F.relu(self.input_projection(x))
         h = F.dropout(h, p=self.dropout, training=self.training)
 
@@ -38,7 +45,10 @@ class GlobalGraphEncoder(nn.Module):
 
 
 class DeckPolicy(nn.Module):
+    """Policy head that builds state vectors and scores candidate cards."""
+
     def __init__(self, node_dim: int, state_dim: int, dropout: float):
+        """Initialize state and candidate scoring subnetworks."""
         super().__init__()
 
         self.state_network = nn.Sequential(
@@ -57,6 +67,7 @@ class DeckPolicy(nn.Module):
         )
 
     def make_state(self, commander_vec: torch.Tensor, pool_vec: torch.Tensor, *, strategy_vec: Optional[torch.Tensor] = None) -> torch.Tensor:
+        """Build a deck-generation state vector from commander/pool context."""
         if strategy_vec is None:
             mixed = 0.7 * pool_vec + 0.3 * commander_vec
         else:
@@ -64,16 +75,29 @@ class DeckPolicy(nn.Module):
         return self.state_network(mixed)
 
     def score_candidates(self, node_embeddings: torch.Tensor, state: torch.Tensor, candidate_indices: torch.Tensor) -> torch.Tensor:
+        """Score candidate node indices against the current generation state."""
         candidate_embeds = node_embeddings[candidate_indices]
         repeated_state = state.unsqueeze(0).expand(candidate_embeds.size(0), -1)
         return self.scoring_network(torch.cat([candidate_embeds, repeated_state], dim=1)).squeeze(-1)
 
+    def forward(self, node_embeddings: torch.Tensor, state: torch.Tensor, candidate_indices: torch.Tensor) -> torch.Tensor:
+        """Forward pass alias for candidate scoring."""
+        return self.score_candidates(node_embeddings, state, candidate_indices)
+
 
 class CommanderDeckGNN(nn.Module):
+    """Top-level model bundling graph encoder and deck policy head."""
+
     def __init__(self, in_dim: int, edge_dim: int, hidden_dim: int, node_dim: int, state_dim: int, num_layers: int, dropout: float):
+        """Initialize encoder and policy modules."""
         super().__init__()
         self.encoder = GlobalGraphEncoder(in_dim, edge_dim, hidden_dim, node_dim, num_layers, dropout)
         self.policy = DeckPolicy(node_dim, state_dim, dropout)
 
     def encode(self, node_features: torch.Tensor, edge_index: torch.Tensor, edge_attr: torch.Tensor) -> torch.Tensor:
+        """Encode node features into graph-contextual embeddings."""
         return self.encoder(node_features, edge_index, edge_attr)
+
+    def forward(self, node_features: torch.Tensor, edge_index: torch.Tensor, edge_attr: torch.Tensor) -> torch.Tensor:
+        """Forward pass alias for graph encoding."""
+        return self.encode(node_features, edge_index, edge_attr)

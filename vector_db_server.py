@@ -14,12 +14,13 @@ from flask import Flask, request, jsonify, g
 from flask_cors import CORS
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
+from google.api_core.exceptions import GoogleAPICallError, RetryError
 
 from vector_database import VectorDatabase
 from tagging_model import load_model
 from firestore.firestore_connector import authenticate_api_key, touch_last_used
 from deckgen import DeckGenBundle, DeckGenPaths
-from card_data import SimpleDeck, SimpleDeckAnalyzer
+from card_data.deck import SimpleDeck, SimpleDeckAnalyzer
 from config import CONFIG
 
 app = Flask(__name__)
@@ -34,7 +35,7 @@ model, class_names = None, []
 try:
     model, class_names = load_model(CONFIG.models["TAGGING_MODEL_PATH"])
     model.to(device).eval()
-except Exception as e:
+except (FileNotFoundError, RuntimeError, ValueError, KeyError, OSError) as e:
     print(f"Error loading tagging model: {e}")
 
 vd = VectorDatabase.load_static(CONFIG.datasets["VECTOR_DATABASE_PATH"])
@@ -109,7 +110,7 @@ def _authenticate_api_key():
 
     try:
         touch_last_used(g.api_key_id)
-    except Exception:
+    except (GoogleAPICallError, RetryError, ValueError, RuntimeError):
         pass
     return None
 
@@ -119,7 +120,7 @@ def _log_request(resp):
     try:
         dt_ms = (time.time() - getattr(g, "start_time", time.time())) * 1000.0
         logger.info("%s %s -> %s (%.1fms)", request.method, request.path, resp.status_code, dt_ms)
-    except Exception:
+    except (RuntimeError, AttributeError, TypeError, ValueError):
         pass
     return resp
 
@@ -328,12 +329,7 @@ def get_tags(v_id):
             top_k=request.args.get("top_k"),
         )
 
-    if hasattr(vector, "detach"):
-        vec_np = vector.detach().cpu().numpy()
-    elif hasattr(vector, "cpu"):
-        vec_np = vector.cpu().numpy()
-    else:
-        vec_np = np.asarray(vector, dtype=np.float32)
+    vec_np = VectorDatabase.vector_to_numpy(vector)
 
     threshold = clamp_float(threshold, 0.0, 1.0)
     top_k = clamp_int(top_k, 1, 1000)

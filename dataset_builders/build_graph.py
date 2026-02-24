@@ -384,7 +384,7 @@ def main():
         commander_graph=commander_graph,
         topk_per_node=cfg.topk_per_node,
     )
-    
+
     torch.save(
         {"node_names": node_names, "node_to_idx": node_to_idx, "node_meta": node_meta},
         cfg.out_nodes_pt,

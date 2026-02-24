@@ -1,8 +1,12 @@
+"""Generate predicted tags for each vector-database card entry."""
+
+import json
+
+import numpy as np
+import torch
+
 from tagging_model import load_model
 from vector_database import VectorDatabase
-import json
-import torch
-import numpy as np
 from config import CONFIG
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -14,12 +18,7 @@ vd = VectorDatabase.load_static(CONFIG.datasets["VECTOR_DATABASE_PATH"])
 output_path = CONFIG.datasets["TAGS_DATASET_PATH"]
 tagged_data = {}
 for card, vector in vd.items():
-    if hasattr(vector, "detach"):
-        vec_np = vector.detach().cpu().numpy()
-    elif hasattr(vector, "cpu"):
-        vec_np = vector.cpu().numpy()
-    else:
-        vec_np = np.asarray(vector, dtype=np.float32)
+    vec_np = VectorDatabase.vector_to_numpy(vector)
 
     x = torch.from_numpy(vec_np.astype(np.float32)).unsqueeze(0).to(device)
     logits = model(x)

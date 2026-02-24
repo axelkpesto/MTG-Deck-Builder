@@ -2,10 +2,11 @@
 
 import json
 
+
 class Card:
     """Serializable MTG card representation used across the project."""
 
-    def __init__(self, commander_legal: bool, card_name: str, card_types: list[str], card_supertypes: str, card_subtypes: list[str], mana_cost: int, mana_cost_exp: str, color_identity: list[str], defense: str, rarity: str, text: str, rank: str, power: str, toughness: str, loyalty: str, id: str) -> None:
+    def __init__(self, commander_legal: bool, card_name: str, card_types: list[str], card_supertypes: str, card_subtypes: list[str], mana_cost: int, mana_cost_exp: str, color_identity: list[str], defense: str, rarity: str, text: str, rank: str, power: str, toughness: str, loyalty: str, card_id: str) -> None:
         self.commander_legal: bool = bool(commander_legal) #Is the Card Legal in Commander? True if property exists and is legal, False otherwise.
         self.card_name: str = card_name #Name of the Card. None if property doesn't exist.
         self.card_types: list[str] =  card_types #Card Types (EX: CREATURE) of the Card. None if property doesn't exist.
@@ -21,7 +22,7 @@ class Card:
         self.power: str = power #Power of a Creature Card. None if Card is not a Creature.
         self.toughness: str = toughness #Toughness of a Creature Card. None if Card is not a Creature.
         self.loyalty: str = loyalty #Starting Loyalty of a Planeswalker Card. None if Card is not a Planeswalker.
-        self.id: str = id #MultiverseID Identifier
+        self.card_id: str = card_id #MultiverseID Identifier
 
     def __eq__(self, value: object) -> bool:
         if isinstance(value, Card):
@@ -36,11 +37,6 @@ class Card:
 
     def __len__(self) -> int:
         return 1
-
-    def tags(self) -> list[str]:
-        """Return derived tags for this card."""
-        from card_data.card_fields import CardFields
-        return CardFields.tag_card(self)
 
     def get_attributes(self) -> dict:
         """
@@ -64,7 +60,7 @@ class Card:
             'power':self.power,
             'toughness':self.toughness,
             'loyalty':self.loyalty,
-            'id':self.id,
+            'card_id':self.card_id,
             # 'tags':self.tags(),
         }
 

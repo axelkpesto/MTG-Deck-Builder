@@ -552,7 +552,7 @@ class CardFields:
             'power': card.get('power', ''),
             'toughness': card.get('toughness', ''),
             'loyalty': card.get('loyalty', ''),
-            'id': card.get('identifiers','').get('scryfallId', ''),
+            'card_id': card.get('identifiers','').get('scryfallId', ''),
         }
         return Card(**card_kwargs)
 
@@ -577,7 +577,7 @@ class CardFields:
             'power': card.get('power', ''),
             'toughness': card.get('toughness', ''),
             'loyalty': card.get('loyalty', ''),
-            'id': card.get('scryfall_id', ''),
+            'card_id': card.get('scryfall_id', ''),
         }
         return Card(**card_kwargs)
 

@@ -1,3 +1,5 @@
+"""Fetch commander deck data from Moxfield and serialize simple deck records."""
+
 import json
 import os
 import time
@@ -5,6 +7,7 @@ from dataclasses import dataclass
 from typing import Any, Dict, Iterable, List, Optional
 
 import requests
+from requests import RequestException
 
 from card_data import SimpleDeck
 from config import CONFIG
@@ -19,6 +22,8 @@ def _headers() -> Dict[str, str]:
 
 @dataclass(frozen=True)
 class FetchConfig:
+    """Configuration for paging, filtering, and request behavior."""
+
     format: str = "commander"
     page_size: int = 100
     timeout_s: int = 30
@@ -26,12 +31,14 @@ class FetchConfig:
     min_total_cards: int = 100
 
 def _get_json(session: requests.Session, url: str, *, params: Optional[Dict[str, Any]] = None, timeout_s: int = 30) -> Dict[str, Any]:
+    """GET a JSON payload and raise on HTTP errors."""
     r = session.get(url, headers=_headers(), params=params, timeout=timeout_s)
     r.raise_for_status()
     return r.json()
 
 
 def fetch_deck_summaries(session: requests.Session, *, page: int, cfg: FetchConfig) -> List[Dict[str, Any]]:
+    """Fetch paged deck summaries from Moxfield."""
     url = f"{MOXFIELD_BASE}/decks/all/"
     params = {"format": cfg.format, "page": int(page), "pageSize": int(cfg.page_size)}
     payload = _get_json(session, url, params=params, timeout_s=cfg.timeout_s)
@@ -40,13 +47,15 @@ def fetch_deck_summaries(session: requests.Session, *, page: int, cfg: FetchConf
 
 
 def fetch_deck_detail(session: requests.Session, *, public_id: str, cfg: FetchConfig) -> Optional[Dict[str, Any]]:
+    """Fetch a single deck detail payload by public deck id."""
     url = f"{MOXFIELD_BASE}/decks/all/{public_id}"
     try:
         return _get_json(session, url, timeout_s=cfg.timeout_s)
-    except Exception:
+    except (RequestException, ValueError):
         return None
 
 def parse_simple_deck(deck_detail: Dict[str, Any], *, cfg: FetchConfig) -> Optional[SimpleDeck]:
+    """Convert raw deck detail JSON into a `SimpleDeck` instance."""
     if not isinstance(deck_detail, dict):
         return None
 
@@ -72,7 +81,7 @@ def parse_simple_deck(deck_detail: Dict[str, Any], *, cfg: FetchConfig) -> Optio
         if isinstance(entry, dict):
             try:
                 qty = int(entry.get("quantity", 1))
-            except Exception:
+            except (TypeError, ValueError):
                 qty = 1
         if qty > 0:
             cards.extend([str(card_name)] * qty)
@@ -80,9 +89,10 @@ def parse_simple_deck(deck_detail: Dict[str, Any], *, cfg: FetchConfig) -> Optio
     if (len(commanders) + len(cards)) < cfg.min_total_cards:
         return None
 
-    return SimpleDeck(id=deck_id, commanders=commanders, cards=cards)
+    return SimpleDeck(deck_id=deck_id, commanders=commanders, cards=cards)
 
 def save_simple_decks(path: str, decks: Dict[str, SimpleDeck]) -> None:
+    """Persist simple decks to disk as JSON keyed by deck id."""
     payload = {deck_id: d.get_attributes() for deck_id, d in decks.items()}
     os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
     with open(path, "w", encoding="utf-8") as f:
@@ -90,6 +100,7 @@ def save_simple_decks(path: str, decks: Dict[str, SimpleDeck]) -> None:
 
 
 def load_simple_decks(path: str) -> Dict[str, SimpleDeck]:
+    """Load simple decks from disk, accepting dict or list JSON layouts."""
     if not os.path.exists(path):
         return {}
     with open(path, "r", encoding="utf-8") as f:
@@ -110,11 +121,12 @@ def load_simple_decks(path: str) -> Dict[str, SimpleDeck]:
         try:
             d = SimpleDeck.from_json(obj)
             out[str(d.id)] = d
-        except Exception:
+        except (TypeError, KeyError, ValueError):
             continue
     return out
 
 def build_simple_decks(start_page: int = 1, end_page: int = 50, out_path: str = DEFAULT_OUT_PATH, seed_existing: bool = True, cfg: Optional[FetchConfig] = None) -> Dict[str, SimpleDeck]:
+    """Fetch pages of decks, parse them, and continuously save progress."""
     cfg = cfg or FetchConfig()
 
     decks: Dict[str, SimpleDeck] = load_simple_decks(out_path) if seed_existing else {}

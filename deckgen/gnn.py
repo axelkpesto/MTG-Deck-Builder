@@ -1,3 +1,5 @@
+"""Train and export the deck-generation GNN checkpoint and embeddings."""
+
 import os
 import random
 from typing import Any, Dict, List, Optional, Set, Tuple
@@ -16,6 +18,7 @@ from deckgen.utils import mana_value_bucket, set_seed
 card_decoder = CardDecoder()
 
 def load_graph(paths: DeckGenPaths, device: torch.device) -> Tuple[List[str], Dict[str, int], torch.Tensor, torch.Tensor]:
+    """Load node metadata and edge tensors for the training graph."""
     nodes_blob = torch.load(paths.nodes_pt, map_location="cpu", weights_only=False)
     edges_blob = torch.load(paths.edges_pt, map_location="cpu", weights_only=False)
 
@@ -29,6 +32,7 @@ def load_graph(paths: DeckGenPaths, device: torch.device) -> Tuple[List[str], Di
 
 
 def build_node_feature_matrix(node_names: List[str], paths: DeckGenPaths, device: torch.device) -> torch.Tensor:
+    """Build the graph node feature matrix from vector database entries."""
     vector_db = VectorDatabase.load_static(paths.vectors_pt)
 
     reference_vec = None
@@ -63,10 +67,12 @@ def build_node_feature_matrix(node_names: List[str], paths: DeckGenPaths, device
 
 
 def load_simple_decks(decks_json_path: str) -> List[SimpleDeck]:
+    """Load serialized simple decks from JSON."""
     return SimpleDeck.load_json_file(decks_json_path)
 
 
 def deck_to_training_sequence(deck: SimpleDeck, node_to_index: Dict[str, int]) -> Optional[Tuple[int, List[int]]]:
+    """Convert a deck into (commander_idx, target card sequence) training data."""
     if not deck.commanders:
         return None
 
@@ -99,6 +105,7 @@ def deck_to_training_sequence(deck: SimpleDeck, node_to_index: Dict[str, int]) -
     return commander_index, card_indices
 
 def build_combo_edge_set(edge_index: torch.Tensor, edge_attr: torch.Tensor, combo_col: int = 1) -> Set[Tuple[int, int]]:
+    """Extract directed edges with nonzero combo strength from edge attributes."""
     edge_index_cpu = edge_index.detach().cpu()
     edge_attr_cpu = edge_attr.detach().cpu()
 
@@ -114,6 +121,7 @@ def build_combo_edge_set(edge_index: torch.Tensor, edge_attr: torch.Tensor, comb
 
 
 def precompute_negative_buckets(*, num_nodes: int, mana_value_cpu: np.ndarray, is_land_cpu: np.ndarray) -> Tuple[np.ndarray, np.ndarray, Dict[Tuple[int, int], np.ndarray]]:
+    """Precompute mana/type buckets for harder negative sampling during training."""
     mv_bucket_by_node = np.zeros((num_nodes,), dtype=np.int8)
     for i in range(num_nodes):
         mv_bucket_by_node[i] = np.int8(mana_value_bucket(float(mana_value_cpu[i])))
@@ -132,6 +140,7 @@ def precompute_negative_buckets(*, num_nodes: int, mana_value_cpu: np.ndarray, i
 
 
 def sample_hard_negative_candidates(*, num_nodes: int, true_index: int, banned_indices: Set[int], num_negatives: int, device: torch.device, mv_bucket_by_node: np.ndarray, type_bucket_by_node: np.ndarray, bucket_to_indices: Dict[Tuple[int, int], np.ndarray]) -> torch.Tensor:
+    """Sample candidate indices containing one positive and many hard negatives."""
     true_mv_bucket = int(mv_bucket_by_node[true_index])
     true_type_bucket = int(type_bucket_by_node[true_index])
     same_bucket = bucket_to_indices.get((true_mv_bucket, true_type_bucket))
@@ -174,13 +183,14 @@ def sample_hard_negative_candidates(*, num_nodes: int, true_index: int, banned_i
 
 
 def train_one_epoch(*, model: CommanderDeckGNN, graph: Data, training_examples: List[Tuple[int, List[int]]], cfg: DeckTrainConfig, optimizer: torch.optim.Optimizer, scaler: Optional[torch.amp.GradScaler], combo_edges: Set[Tuple[int, int]], mv_bucket_by_node: np.ndarray, type_bucket_by_node: np.ndarray, bucket_to_indices: Dict[Tuple[int, int], np.ndarray]) -> float:
+    """Train the model for one epoch and return mean loss across train steps."""
     model.train()
     num_nodes = int(graph.x.size(0))
 
     total_loss = 0.0
     steps = 0
 
-    autocast_enabled = (graph.x.device.type == "cuda")
+    autocast_enabled = graph.x.device.type == "cuda"
 
     for _ in range(cfg.steps_per_epoch):
         commander_index, card_sequence = random.choice(training_examples)
@@ -253,11 +263,13 @@ def train_one_epoch(*, model: CommanderDeckGNN, graph: Data, training_examples: 
 
 @torch.inference_mode()
 def compute_node_embeddings(model: CommanderDeckGNN, graph: Data) -> torch.Tensor:
+    """Compute node embeddings in evaluation mode."""
     model.eval()
     return model.encode(graph.x, graph.edge_index, graph.edge_attr)
 
 
 def save_checkpoint(*, path: str, model: CommanderDeckGNN, train_cfg: DeckTrainConfig, node_embeddings: Optional[torch.Tensor]) -> None:
+    """Save model checkpoint and optional node embeddings to disk."""
     out_dir = os.path.dirname(path)
     if out_dir:
         os.makedirs(out_dir, exist_ok=True)
@@ -275,6 +287,7 @@ def save_checkpoint(*, path: str, model: CommanderDeckGNN, train_cfg: DeckTrainC
 
 
 def main() -> None:
+    """Run end-to-end GNN training and persist the resulting checkpoint."""
     paths = DeckGenPaths()
     cfg = DeckTrainConfig()
 

@@ -5,8 +5,8 @@ from datetime import datetime, timedelta, timezone
 from google.cloud import firestore
 from dotenv import load_dotenv
 
-from .Firebase_Auth import validate_api_key as validate_firebase_api_key
-from .Firebase_Auth import generate_api_key as generate_firebase_api_key
+from .firebase_auth import validate_api_key as validate_firebase_api_key
+from .firebase_auth import generate_api_key as generate_firebase_api_key
 
 load_dotenv()
 
@@ -75,5 +75,5 @@ def touch_last_used(api_key_id: str) -> None:
     doc_ref.update({"last_used_at": datetime.now(timezone.utc)})
 
 if __name__ == "__main__":
-    user_id = "unlimited_user"
-    _raw_key = create_api_key(user_id, rate_limit="unlimited")
+    DEMO_USER_ID = "unlimited_user"
+    _raw_key = create_api_key(DEMO_USER_ID, rate_limit="unlimited")

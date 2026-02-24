@@ -1,3 +1,5 @@
+"""Load Configuration from JSON to usable dictionaries"""
+
 import json
 from typing import Dict
 

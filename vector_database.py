@@ -236,7 +236,7 @@ class VectorStore:
                     count += 1
                     if limit is not None and count >= limit:
                         return
-            except Exception:
+            except (TypeError, ValueError, KeyError, AttributeError):
                 continue
 
     def filter(self, predicate: Callable[[str, np.ndarray], bool], *, limit: Optional[int] = None, names_only: bool = False, vectors_only: bool = False) -> List:
@@ -430,6 +430,16 @@ class VectorDatabase:
     def to_index(self) -> Dict[str, int]:
         """Return mapping from vector id to positional index."""
         return {k: i for i, k in enumerate(self.vector_store.keys())}
+
+    @staticmethod
+    def vector_to_numpy(vec: Any) -> np.ndarray:
+        """Convert tensor-like vectors to a float32 NumPy array."""
+        if hasattr(vec, "detach"):
+            return vec.detach().cpu().numpy()
+        if hasattr(vec, "cpu"):
+            return vec.cpu().numpy()
+        return np.asarray(vec, dtype=np.float32)
+
 
 if __name__ == "__main__":
     # vd = VectorDatabase(CardEncoder(), CardDecoder())
