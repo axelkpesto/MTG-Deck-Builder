@@ -39,7 +39,7 @@ MTG-Deck-Builder/
 
 ## Quickstart (local)
 ### 1. Requirements
-- Python `3.12` (see `.python-version`)
+- Python `3.12`
 - Pip
 - Optional CUDA GPU for faster inference/training
 
