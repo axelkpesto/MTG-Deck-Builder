@@ -4,6 +4,7 @@
 .gitattributes
 .git/
 .vscode/
+.github\workflows
 
 #Python
 *.pyc
@@ -12,6 +13,7 @@
 __pycache__
 .pytest_cache
 .python-version
+.pylintrc
 venv/
 
 #Readme
@@ -23,7 +25,8 @@ datasets/parsed_cards.json
 datasets/variants.json
 
 #Unimportant Files
-MTG_GPT.py
+LICENSE
+mtg_gpt.py
 test.py
 
 #Text Files
