@@ -1,6 +1,6 @@
 """Utilities for decoding and constraining encoded MTG card vectors."""
 
-from typing import Dict, List, Optional
+from typing import Dict, List
 
 import numpy as np
 import torch
@@ -10,16 +10,16 @@ from card_data.card_fields import CardFields
 class CardDecoder:
     """Decode vectorized cards into readable fields and constrained tensors."""
 
-    def __init__(self, embed_dim: Optional[int] = 686):
+    def __init__(self, embed_dim: int = 686):
         """Initialize field maps and slice definitions for encoded vectors."""
         self.card_types = CardFields.card_types()
         self.card_supertypes = CardFields.card_supertypes()
         self.all_subtypes = CardFields.card_subtypes()
         self.color_identities = CardFields.color_identities()
         self.rarities = CardFields.rarities()
-        self.embed_dim = embed_dim
+        self.embed_dim: int = int(embed_dim)
 
-        self.field_map = {
+        self.field_map: Dict[str, list[str]] = {
             "types": self.card_types,
             "supertypes": self.card_supertypes,
             "subtypes": self.all_subtypes,
@@ -28,15 +28,13 @@ class CardDecoder:
             "rarity": self.rarities
         }
 
-        self.slice_map = {
+        self.slice_map: Dict[str, tuple[int, int]] = {
             "types": (0, len(self.card_types)),
             "supertypes": (len(self.card_types), len(self.card_types) + len(self.card_supertypes)),
             "subtypes": (len(self.card_types) + len(self.card_supertypes), len(self.card_types) + len(self.card_supertypes) + len(self.all_subtypes)),
             "mana": (len(self.card_types) + len(self.card_supertypes) + len(self.all_subtypes), len(self.card_types) + len(self.card_supertypes) + len(self.all_subtypes) + 1),
             "colors": (len(self.card_types) + len(self.card_supertypes) + len(self.all_subtypes) + 1, len(self.card_types) + len(self.card_supertypes) + len(self.all_subtypes) + 1 + len(self.color_identities)),
             "rarity": (len(self.card_types) + len(self.card_supertypes) + len(self.all_subtypes) + 1 + len(self.color_identities), len(self.card_types) + len(self.card_supertypes) + len(self.all_subtypes) + 1 + len(self.color_identities) + 1),
-            "embed": ("tail", embed_dim),
-            "head_len": len(self.card_types) + len(self.card_supertypes) + len(self.all_subtypes) + 1 + len(self.color_identities) + 1
         }
 
     def decode(self, card_name: str, encoded_vector: np.ndarray) -> str:
@@ -89,9 +87,9 @@ class CardDecoder:
 
     def item_from_vector(self, vec: torch.Tensor, value: str, threshold: float = 0.5) -> List[str]:
         """Return active categorical items from a vector feature slice."""
-        vec = np.asarray(vec)
-        s = self.slice(value, vec.shape[-1])
-        hot = vec[s] > threshold
+        vec_np = np.asarray(vec)
+        s = self.slice(value, vec_np.shape[-1])
+        hot = vec_np[s] > threshold
         return [c for c, on in zip(self.field_map[value], hot) if on]
 
     def constrain_logits(self, logits: torch.Tensor, threshold: float = 0.5) -> torch.Tensor:

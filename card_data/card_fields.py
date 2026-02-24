@@ -427,7 +427,7 @@ class CardFields:
     def basic_type_name(card_name: str) -> str:
         """Return canonical basic land type from a card name."""
         if card_name not in CardFields.__BASIC_LANDS:
-            return None
+            return "Wastes"
         for t in ("Plains", "Island", "Swamp", "Mountain", "Forest", "Wastes"):
             if t.lower() in card_name.lower():
                 return t

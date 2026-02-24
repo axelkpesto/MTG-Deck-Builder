@@ -17,7 +17,10 @@ class DataSet:
 
     def __init__(self) -> None:
         """Initialize raw set data and parsed card dataframe."""
-        self.set_dataframe: pd.Series = self.json_data_setup(os.environ.get("FULL_DATASET_PATH"))
+        dataset_path = os.environ.get("FULL_DATASET_PATH")
+        if dataset_path is None:
+            raise KeyError("FULL_DATASET_PATH not set in environment")
+        self.set_dataframe: pd.Series = self.json_data_setup(dataset_path)
         self.card_set: pd.DataFrame = self.parse_set_data()
 
     def json_data_setup(self, filename: str) -> pd.Series:
@@ -75,4 +78,7 @@ class DataSet:
 
 if __name__ == "__main__":
     ds = DataSet()
-    ds.write_data_json(os.environ.get("CARDS_DATASET"))
+    cards_dataset_path = os.environ.get("CARDS_DATASET")
+    if cards_dataset_path is None:
+        raise KeyError("CARDS_DATASET not set in environment")
+    ds.write_data_json(cards_dataset_path)

@@ -17,14 +17,14 @@ class Deck:
 
     def __init__(self, deck_id: str | None, colors: List[str], color_percentages: Dict[str, float], bracket: int, deck_format: str | None, commanders: List[Card], companions: List[Card], mainboard_count: int, cards: List[Tuple[Card, int]]) -> None:
         """Initialize a deck model from structured card objects."""
-        self.id: str = deck_id
+        self.id: str | None = deck_id
         self.colors: List[str] = colors
         self.color_percentages: Dict[str, float] = color_percentages
         self.bracket: int = bracket
         self.mainboard_count: int = mainboard_count
         self.cards: List[Tuple[Card, int]] = cards
         self.cards_expanded: List[Card] = [card for card, count in self.cards for _ in range(count)]
-        self.format: str = deck_format
+        self.format: str | None = deck_format
         self.commanders: List[Card] = commanders
         self.companions: List[Card] = companions
         self.all_cards = self.commanders + self.companions + self.cards_expanded
@@ -68,9 +68,8 @@ class Deck:
         if len(self.cards) >= 99:
             self.cards = self.cards[:99]
             return
-        basics = Deck.basic_lands_from_colors(commander_colors)
-        need = 99 - len(self.cards)
-        self.cards += (basics * ((need // len(basics)) + 1))[:need]
+        # `Deck.cards` stores `(Card, qty)` tuples; automatic basic-land padding is handled on SimpleDeck.
+        return
 
     @staticmethod
     def basic_lands_from_colors(colors: List[str]) -> List[str]:
@@ -82,7 +81,7 @@ class SimpleDeck:
 
     def __init__(self, deck_id: str | None = None, commanders: List[str] | None = None, cards: List[str] | None = None) -> None:
         """Initialize simple deck structure from card names."""
-        self.id: str = deck_id
+        self.id: str | None = deck_id
         self.commanders: List[str] = commanders or []
         self.cards: List[str] = cards or []
 
@@ -245,7 +244,7 @@ class SimpleDeckAnalyzer:
 
     def analyze_tags(self, prep: PreparedDeckData) -> Dict[str, Any]:
         """Compute tag counts and normalized frequencies."""
-        tag_counts = defaultdict(int)
+        tag_counts: dict[str, int] = defaultdict(int)
 
         for _, tags in prep.tags_by_card.items():
             for t in tags:

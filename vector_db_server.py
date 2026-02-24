@@ -20,7 +20,7 @@ from vector_database import VectorDatabase
 from tagging_model import load_model
 from firestore.firestore_connector import authenticate_api_key, touch_last_used
 from deckgen import DeckGenBundle, DeckGenPaths
-from card_data.deck import SimpleDeck, SimpleDeckAnalyzer
+from card_data import SimpleDeck, SimpleDeckAnalyzer, CardEncoder, CardDecoder
 from config import CONFIG
 
 app = Flask(__name__)
@@ -31,18 +31,20 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("vector-db-server")
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-model, class_names = None, []
+model: Any | None = None
+class_names: list[str] = []
 try:
     model, class_names = load_model(CONFIG.models["TAGGING_MODEL_PATH"])
     model.to(device).eval()
 except (FileNotFoundError, RuntimeError, ValueError, KeyError, OSError) as e:
     print(f"Error loading tagging model: {e}")
 
-vd = VectorDatabase.load_static(CONFIG.datasets["VECTOR_DATABASE_PATH"])
+vd = VectorDatabase(CardEncoder(), CardDecoder())
+vd.load(CONFIG.datasets["VECTOR_DATABASE_PATH"])
 with open(CONFIG.datasets["TAGS_DATASET_PATH"], "r", encoding="utf-8") as f:
     tag_dataset = json.load(f)
 
-gen = DeckGenBundle.load(paths=DeckGenPaths(), device=device, vector_db=vd)
+gen = DeckGenBundle.load(paths=DeckGenPaths(), device=str(device), vector_db=vd)
 DEFAULT_RATE_LIMIT = "120 per minute"
 
 limiter = Limiter(

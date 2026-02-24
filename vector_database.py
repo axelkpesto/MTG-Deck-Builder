@@ -8,7 +8,7 @@ import numpy as np
 import pandas as pd
 import torch
 
-from card_data import CardFields
+from card_data import CardFields, CardEncoder, CardDecoder
 from config import CONFIG
 
 class VectorStore:
@@ -85,7 +85,7 @@ class VectorStore:
         if self.device.type == 'cuda':
             torch.cuda.empty_cache()
 
-    def items(self) -> List[Tuple[str, np.array]]:
+    def items(self) -> List[Tuple[str, np.ndarray]]:
         """Return all `(id, vector)` items."""
         return list(self.vector_data.items())
 
@@ -93,11 +93,11 @@ class VectorStore:
         """Return all vector ids."""
         return list(self.vector_data.keys())
 
-    def values(self) -> List[np.array]:
+    def values(self) -> List[np.ndarray]:
         """Return all vectors."""
         return list(self.vector_data.values())
 
-    def setdefault(self, v_id: str, vector: np.array) -> None:
+    def setdefault(self, v_id: str, vector: np.ndarray) -> torch.Tensor:
         """Set `v_id` to `vector` if absent and return stored value."""
         self._mark_cache(dirty=True)
         return self.vector_data.setdefault(v_id, vector)
@@ -106,7 +106,7 @@ class VectorStore:
         """Return whether an id exists in the store."""
         return value in self.vector_data
 
-    def to_ndarray(self, *, predicate: Optional[Callable[[str, np.ndarray], bool]] = None) -> np.ndarray:
+    def to_ndarray(self, *, predicate: Optional[Callable[[str, Any], bool]] = None) -> np.ndarray:
         """Return vectors as an ndarray, optionally filtered by predicate."""
         if predicate:
             return np.array(
@@ -114,7 +114,7 @@ class VectorStore:
             )
         return np.array([v.cpu().numpy() for v in self.vector_data.values()])
 
-    def to_dataframe(self, *, predicate: Optional[Callable[[str, np.ndarray], bool]] = None) -> pd.DataFrame:
+    def to_dataframe(self, *, predicate: Optional[Callable[[str, Any], bool]] = None) -> pd.DataFrame:
         """Return vectors as a dataframe, optionally filtered by predicate."""
         if predicate:
             return pd.DataFrame(
@@ -226,7 +226,7 @@ class VectorStore:
 
         self._mark_cache(dirty=True)
 
-    def filter_iterator(self, predicate: Callable[[str, np.ndarray], bool], *, limit: Optional[int] = None) -> Iterator[Tuple[str, np.ndarray]]:
+    def filter_iterator(self, predicate: Callable[[str, Any], bool], *, limit: Optional[int] = None) -> Iterator[Tuple[str, torch.Tensor]]:
         """Yield filtered `(id, vector)` pairs, optionally limited."""
         count = 0
         for name, vec in self.items():
@@ -239,9 +239,9 @@ class VectorStore:
             except (TypeError, ValueError, KeyError, AttributeError):
                 continue
 
-    def filter(self, predicate: Callable[[str, np.ndarray], bool], *, limit: Optional[int] = None, names_only: bool = False, vectors_only: bool = False) -> List:
+    def filter(self, predicate: Callable[[str, Any], bool], *, limit: Optional[int] = None, names_only: bool = False, vectors_only: bool = False) -> List[Any]:
         """Return filtered ids/vectors/pairs based on flags."""
-        out = []
+        out: List[Any] = []
         for name, vec in self.filter_iterator(predicate, limit=limit):
             if names_only:
                 out.append(name)
@@ -297,7 +297,7 @@ class VectorDatabase:
         """Clear all stored vectors."""
         self.vector_store.clear()
 
-    def items(self) -> List[Tuple[str, np.array]]:
+    def items(self) -> List[Tuple[str, np.ndarray]]:
         """Return all `(id, vector)` items."""
         return self.vector_store.items()
 
@@ -305,19 +305,19 @@ class VectorDatabase:
         """Return all vector ids."""
         return self.vector_store.keys()
 
-    def values(self) -> List[np.array]:
+    def values(self) -> List[np.ndarray]:
         """Return all vectors."""
         return self.vector_store.values()
 
-    def setdefault(self, v_id: str, vector: np.array) -> None:
+    def setdefault(self, v_id: str, vector: np.ndarray) -> torch.Tensor:
         """Set default vector for id if missing."""
         return self.vector_store.setdefault(v_id, vector)
 
-    def to_ndarray(self, *, predicate: Optional[Callable[[str, np.ndarray], bool]] = None) -> np.ndarray:
+    def to_ndarray(self, *, predicate: Optional[Callable[[str, Any], bool]] = None) -> np.ndarray:
         """Return vectors as an ndarray, optionally filtered."""
         return self.vector_store.to_ndarray(predicate=predicate)
 
-    def to_dataframe(self, *, predicate: Optional[Callable[[str, np.ndarray], bool]] = None) -> pd.DataFrame:
+    def to_dataframe(self, *, predicate: Optional[Callable[[str, Any], bool]] = None) -> pd.DataFrame:
         """Return vectors as a dataframe, optionally filtered."""
         return self.vector_store.to_dataframe(predicate=predicate)
 
@@ -418,7 +418,7 @@ class VectorDatabase:
         vector_db.load(filename)
         return vector_db
 
-    def filter(self, predicate: Callable[[str, np.ndarray], bool], *, limit: Optional[int] = None, names_only: bool = False, vectors_only: bool = False) -> List:
+    def filter(self, predicate: Callable[[str, Any], bool], *, limit: Optional[int] = None, names_only: bool = False, vectors_only: bool = False) -> List[Any]:
         """Filter vectors using a predicate and output mode flags."""
         return self.vector_store.filter(
             predicate,
@@ -442,9 +442,8 @@ class VectorDatabase:
 
 
 if __name__ == "__main__":
-    # vd = VectorDatabase(CardEncoder(), CardDecoder())
-    # vd.parse_json(filename = CONFIG.datasets["FULL_DATASET_PATH"])
-    vd = VectorDatabase.load_static(CONFIG.datasets["VECTOR_DATABASE_PATH"])
+    vd = VectorDatabase(CardEncoder(), CardDecoder())
+    vd.load(CONFIG.datasets["VECTOR_DATABASE_PATH"])
     random_vector = vd.get_random_vector()
 
     print(random_vector)
