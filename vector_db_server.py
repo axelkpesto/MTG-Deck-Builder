@@ -39,7 +39,7 @@ try:
 except (FileNotFoundError, RuntimeError, ValueError, KeyError, OSError) as e:
     print(f"Error loading tagging model: {e}")
 
-vd = VectorDatabase(CardEncoder(), CardDecoder())
+vd = VectorDatabase(None, CardDecoder())
 vd.load(CONFIG.datasets["VECTOR_DATABASE_PATH"])
 with open(CONFIG.datasets["TAGS_DATASET_PATH"], "r", encoding="utf-8") as f:
     tag_dataset = json.load(f)
