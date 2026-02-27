@@ -29,7 +29,6 @@ for card, vector in vd.items():
 
     tagged_data[card] = {
         "tags": predicted_tags,
-        "vector": vec_np.tolist()
     }
 
 with open(output_path, "w", encoding="utf-8") as f:
