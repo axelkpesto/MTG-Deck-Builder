@@ -29,6 +29,7 @@ datasets/variants.json
 LICENSE
 mtg_gpt.py
 test.py
+.dockerignore
 
 #Text Files
 *.txt

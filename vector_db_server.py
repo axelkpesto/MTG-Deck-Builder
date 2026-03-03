@@ -20,7 +20,7 @@ from vector_database import VectorDatabase
 from tagging_model import load_model
 from firestore.firestore_connector import authenticate_api_key, touch_last_used
 from deckgen import DeckGenBundle, DeckGenPaths
-from card_data import SimpleDeck, SimpleDeckAnalyzer, CardEncoder, CardDecoder
+from card_data import SimpleDeck, SimpleDeckAnalyzer, CardDecoder
 from config import CONFIG
 
 app = Flask(__name__)
