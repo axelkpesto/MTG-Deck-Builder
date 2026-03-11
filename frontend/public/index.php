@@ -10,122 +10,131 @@ $user = $_SESSION['user'] ?? null;
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>MTG Deck Builder (PHP OAuth Gateway)</title>
-  <style>
-	body { font-family: Arial, sans-serif; margin: 24px; color: #111; }
-	.row { margin-bottom: 12px; }
-	input, button, textarea { font-size: 14px; padding: 8px; }
-	textarea { width: 100%; height: 220px; }
-	code { background: #f5f5f5; padding: 2px 4px; }
-  </style>
+  <title>MTG Deck Builder</title>
+  <link rel="stylesheet" href="/styles.css">
 </head>
 <body>
-  <h1>MTG Deck Builder</h1>
-  <p>This frontend talks only to <code>/api.php</code>. The global API key stays in backend env vars.</p>
+  <section id="loginShell" class="login-shell"<?= $user ? ' hidden' : '' ?>>
+    <div class="card">
+      <h1>MTG Deck Builder</h1>
+      <p>Sign in to generate, tag, and analyze commander decks.</p>
+      <p><a class="button primary" href="/login.php">Login with OAuth</a></p>
+    </div>
+  </section>
 
-  <?php if (!$user): ?>
-	<p><a href="/login.php">Login with OAuth</a></p>
-  <?php else: ?>
-	<p>Signed in as <strong><?= htmlspecialchars((string)($user['email'] ?: $user['name'] ?: $user['id'])) ?></strong> | <a href="/logout.php">Logout</a></p>
+  <main id="app"<?= $user ? '' : ' hidden' ?>>
+    <div class="topbar">
+      <div class="brand">
+        <h1>MTG Deck Builder</h1>
+        <p id="userLabel">Authenticated</p>
+      </div>
+      <div class="top-actions">
+        <a class="button ghost" href="/logout.php">Logout</a>
+      </div>
+    </div>
 
-	<div class="row">
-	  <label for="commander">Commander</label><br>
-	  <input id="commander" type="text" placeholder="Atraxa, Praetors' Voice" size="40">
-	  <button id="generateBtn">Generate Deck</button>
-	</div>
+    <section class="panel controls">
+      <div class="row split">
+        <div class="group flex-1">
+          <label for="deckName">Deck Name</label>
+          <input id="deckName" class="input" type="text" placeholder="Atraxa Counters">
+        </div>
+        <div class="group flex-1">
+          <label for="commander">Commander</label>
+          <input id="commander" class="input" type="text" placeholder="Atraxa, Praetors' Voice">
+        </div>
+      </div>
+      <div class="row">
+        <button id="generateBtn" class="button primary" type="button">Generate Deck</button>
+        <button id="completeBtn" class="button" type="button">Add Similar Cards</button>
+      </div>
+      <div class="status-line">
+        <span id="statusText"></span>
+      </div>
+    </section>
 
-	<div class="row">
-	  <label for="analysisCommander">Analyze Commander</label><br>
-	  <input id="analysisCommander" type="text" placeholder="Atraxa, Praetors' Voice" size="40">
-	  <button id="analyzeBtn">Analyze Deck</button>
-	</div>
+    <section class="panel">
+      <div class="group">
+        <label for="importCards">Import Cards</label>
+        <textarea id="importCards" class="textarea" placeholder="Sol Ring&#10;Arcane Signet&#10;3 Island"></textarea>
+      </div>
+      <div class="row end">
+        <button id="importBtn" class="button" type="button">Add Cards</button>
+      </div>
+    </section>
 
-	<div class="row">
-	  <label for="cards">Cards (one per line)</label><br>
-	  <textarea id="cards" placeholder="Sol Ring&#10;Arcane Signet"></textarea>
-	</div>
+    <section class="panel">
+      <div class="table-header">
+        <div>
+          <strong>Deck Analysis</strong>
+          <div class="subtle" id="analysisMeta">Analysis updates automatically as the deck changes.</div>
+        </div>
+      </div>
+      <div id="analysisEmpty" class="empty-state">Add cards or generate a deck to see analysis.</div>
+      <div id="analysisPanel" class="analysis-grid" hidden>
+        <article class="analysis-card">
+          <h3>Summary</h3>
+          <div id="analysisSummary" class="metric-grid"></div>
+        </article>
+        <article class="analysis-card">
+          <h3>Primary Tags</h3>
+          <div id="analysisTags" class="chip-wrap"></div>
+        </article>
+        <article class="analysis-card">
+          <h3>Mana Curve</h3>
+          <div id="analysisCurve" class="curve-grid"></div>
+        </article>
+        <article class="analysis-card">
+          <h3>Color Distribution</h3>
+          <div id="analysisColors" class="stack-list"></div>
+        </article>
+      </div>
+    </section>
 
-	<div class="row">
-	  <button id="statusBtn">Check API Status</button>
-	</div>
+    <section class="panel">
+      <div class="table-header">
+        <strong>Deck List</strong>
+        <span id="cardCount">0 cards</span>
+      </div>
+      <div class="controls compact">
+        <div class="group">
+          <label for="searchInput">Search</label>
+          <input id="searchInput" class="input" type="text" placeholder="Search cards">
+        </div>
+        <div class="group">
+          <label for="sortSelect">Sort</label>
+          <select id="sortSelect" class="input">
+            <option value="tag">Tag</option>
+            <option value="name">Name</option>
+            <option value="quantity">Quantity</option>
+          </select>
+        </div>
+        <div class="group">
+          <label for="filterSelect">Filter</label>
+          <select id="filterSelect" class="input"></select>
+        </div>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Qty</th>
+              <th>Card</th>
+              <th>Primary Tag</th>
+              <th>Action</th>
+            </tr>
+          </thead>
+          <tbody id="cardRows"></tbody>
+        </table>
+      </div>
+    </section>
+  </main>
 
-	<h3>Response</h3>
-	<textarea id="output" readonly></textarea>
+  <div id="cardPreview" class="card-preview" hidden>
+    <div id="cardPreviewName" class="card-preview-name"></div>
+    <img id="cardPreviewImage" class="card-preview-image" alt="">
+  </div>
 
-	<script>
-	  async function callApi(payload) {
-		const res = await fetch('/api.php', {
-		  method: 'POST',
-		  headers: { 'Content-Type': 'application/json' },
-		  body: JSON.stringify(payload)
-		});
-		const text = await res.text();
-		let parsed;
-		try {
-		  parsed = JSON.parse(text);
-		} catch (e) {
-		  parsed = { raw: text };
-		}
-		if (!res.ok) {
-		  throw new Error(JSON.stringify(parsed, null, 2));
-		}
-		return parsed;
-	  }
-
-	  function setOutput(value) {
-		document.getElementById('output').value = typeof value === 'string'
-		  ? value
-		  : JSON.stringify(value, null, 2);
-	  }
-
-	  document.getElementById('statusBtn').addEventListener('click', async () => {
-		try {
-		  const data = await callApi({ path: '/status', method: 'GET' });
-		  setOutput(data);
-		} catch (err) {
-		  setOutput(String(err));
-		}
-	  });
-
-	  document.getElementById('generateBtn').addEventListener('click', async () => {
-		const commander = document.getElementById('commander').value.trim();
-		if (!commander) {
-		  setOutput('Commander is required');
-		  return;
-		}
-		try {
-		  const data = await callApi({
-			path: '/generate_deck/' + encodeURIComponent(commander),
-			method: 'GET'
-		  });
-		  setOutput(data);
-		} catch (err) {
-		  setOutput(String(err));
-		}
-	  });
-
-	  document.getElementById('analyzeBtn').addEventListener('click', async () => {
-		const commander = document.getElementById('analysisCommander').value.trim();
-		const cards = document.getElementById('cards').value
-		  .split('\n')
-		  .map(s => s.trim())
-		  .filter(Boolean);
-		if (!commander || cards.length === 0) {
-		  setOutput('Commander and at least one card are required');
-		  return;
-		}
-		try {
-		  const data = await callApi({
-			path: '/analyze_deck',
-			method: 'POST',
-			body: { commander, cards }
-		  });
-		  setOutput(data);
-		} catch (err) {
-		  setOutput(String(err));
-		}
-	  });
-	</script>
-  <?php endif; ?>
+  <script src="/app.js"></script>
 </body>
 </html>

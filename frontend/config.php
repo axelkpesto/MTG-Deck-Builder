@@ -16,15 +16,15 @@ function env_required(string $name): string
 function app_config(): array
 {
     return [
-        'mtg_api_base_url' => rtrim(env_required('MTG_API_BASE_URL'), '/'),
-        'mtg_global_api_key' => env_required('MTG_GLOBAL_API_KEY'),
+        'mtg_api_base_url' => env_required('FLASK_API_PATH'),
+        'mtg_global_api_key' => env_required('FIREBASE_API_KEY'),
         'oauth_client_id' => env_required('OAUTH_CLIENT_ID'),
         'oauth_client_secret' => env_required('OAUTH_CLIENT_SECRET'),
         'oauth_redirect_uri' => env_required('OAUTH_REDIRECT_URI'),
         'oauth_authorize_url' => env_required('OAUTH_AUTHORIZE_URL'),
         'oauth_token_url' => env_required('OAUTH_TOKEN_URL'),
         'oauth_userinfo_url' => env_required('OAUTH_USERINFO_URL'),
-        'oauth_scopes' => getenv('OAUTH_SCOPES') ?: 'openid profile email',
+        'oauth_scopes' => 'openid profile email',
     ];
 }
 
