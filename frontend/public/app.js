@@ -59,7 +59,10 @@
   };
 
   function uid() {
-    return (crypto.randomUUID && crypto.randomUUID()) || `${Date.now()}_${Math.random().toString(16).slice(2)}`;
+    return (
+      (crypto.randomUUID && crypto.randomUUID()) ||
+      `${Date.now()}_${Math.random().toString(16).slice(2)}`
+    );
   }
 
   function setStatus(text, tone) {
@@ -72,11 +75,7 @@
     if (typeof text === "string") {
       setStatus(text, value ? "busy" : "");
     }
-    [
-      els.generateBtn,
-      els.completeBtn,
-      els.importBtn,
-    ].forEach((btn) => {
+    [els.generateBtn, els.completeBtn, els.importBtn].forEach((btn) => {
       if (btn) btn.disabled = value;
     });
   }
@@ -156,7 +155,7 @@
   function mergeCards(items) {
     for (const item of items) {
       const existing = state.cards.find(
-        (c) => c.name.toLowerCase() === item.name.toLowerCase()
+        (c) => c.name.toLowerCase() === item.name.toLowerCase(),
       );
       if (existing) {
         existing.quantity += item.quantity;
@@ -200,13 +199,17 @@
     }
 
     if (state.filterTag) {
-      list = list.filter((c) => (c.primaryTag || "Untagged") === state.filterTag);
+      list = list.filter(
+        (c) => (c.primaryTag || "Untagged") === state.filterTag,
+      );
     }
 
     if (state.sortBy === "name") {
       list.sort((a, b) => a.name.localeCompare(b.name));
     } else if (state.sortBy === "quantity") {
-      list.sort((a, b) => b.quantity - a.quantity || a.name.localeCompare(b.name));
+      list.sort(
+        (a, b) => b.quantity - a.quantity || a.name.localeCompare(b.name),
+      );
     } else {
       list.sort((a, b) => {
         const at = a.primaryTag || "Untagged";
@@ -283,12 +286,22 @@
     els.analysisEmpty.hidden = true;
     els.analysisPanel.hidden = false;
     els.analysisSummary.innerHTML = "";
-    els.analysisSummary.appendChild(renderSummaryMetric("Cards", buildAnalysisCards().length));
-    els.analysisSummary.appendChild(renderSummaryMetric("Unique", state.cards.length));
-    els.analysisSummary.appendChild(renderSummaryMetric("Lands", lands.land_count || 0));
-    els.analysisSummary.appendChild(renderSummaryMetric("Basics", lands.basic_count || 0));
+    els.analysisSummary.appendChild(
+      renderSummaryMetric("Cards", buildAnalysisCards().length),
+    );
+    els.analysisSummary.appendChild(
+      renderSummaryMetric("Unique", state.cards.length),
+    );
+    els.analysisSummary.appendChild(
+      renderSummaryMetric("Lands", lands.land_count || 0),
+    );
+    els.analysisSummary.appendChild(
+      renderSummaryMetric("Basics", lands.basic_count || 0),
+    );
 
-    const topTags = Object.entries(tags).sort((a, b) => b[1] - a[1]).slice(0, 8);
+    const topTags = Object.entries(tags)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 8);
     els.analysisTags.innerHTML = "";
     if (topTags.length === 0) {
       const empty = document.createElement("div");
@@ -400,11 +413,12 @@
     });
     const normalized = normalizeTagPayload(
       tagData.predicted,
-      tagData.predicted_scores || tagData.scores
+      tagData.predicted_scores || tagData.scores,
     );
-    const resolvedName = typeof meta.card_name === "string" && meta.card_name.trim()
-      ? meta.card_name.trim()
-      : item.name;
+    const resolvedName =
+      typeof meta.card_name === "string" && meta.card_name.trim()
+        ? meta.card_name.trim()
+        : item.name;
     state.metaCache[resolvedName] = {
       name: resolvedName,
       cardId: meta.card_id || "",
@@ -428,7 +442,11 @@
 
     loadCardMeta(card.name)
       .then((meta) => {
-        if (els.cardPreview.hidden || els.cardPreview.dataset.cardName !== card.name) return;
+        if (
+          els.cardPreview.hidden ||
+          els.cardPreview.dataset.cardName !== card.name
+        )
+          return;
         els.cardPreviewName.textContent = meta.name || card.name;
         const imageUrl = imageUrlFromCardId(meta.cardId);
         if (!imageUrl) {
@@ -471,7 +489,9 @@
       nameBtn.className = "card-name-button";
       nameBtn.type = "button";
       nameBtn.textContent = card.name;
-      nameBtn.addEventListener("mouseenter", (event) => showPreview(card, event));
+      nameBtn.addEventListener("mouseenter", (event) =>
+        showPreview(card, event),
+      );
       nameBtn.addEventListener("mousemove", positionPreview);
       nameBtn.addEventListener("mouseleave", hidePreview);
       nameBtn.addEventListener("focus", (event) => showPreview(card, event));
@@ -517,13 +537,17 @@
   }
 
   async function runAnalysis(options) {
-    const settings = Object.assign({ immediate: false, showBusy: false }, options);
+    const settings = Object.assign(
+      { immediate: false, showBusy: false },
+      options,
+    );
     const commander = getCommander();
     const cards = buildAnalysisCards();
 
     if (!commander || cards.length === 0) {
       state.analysis = null;
-      els.analysisMeta.textContent = "Add cards or generate a deck to see analysis.";
+      els.analysisMeta.textContent =
+        "Add cards or generate a deck to see analysis.";
       renderAnalysis();
       return;
     }
@@ -606,7 +630,7 @@
       });
 
       const taggedGenerated = await Promise.all(
-        generatedCards.map(validateAndTagCard)
+        generatedCards.map(validateAndTagCard),
       );
       taggedGenerated.forEach((card) => {
         state.cards.push({
@@ -658,7 +682,9 @@
       const untagged = state.cards.filter((card) => !card.primaryTag);
       if (untagged.length > 0) {
         const tagged = await Promise.all(untagged.map(validateAndTagCard));
-        const taggedByName = new Map(tagged.map((card) => [card.name.toLowerCase(), card]));
+        const taggedByName = new Map(
+          tagged.map((card) => [card.name.toLowerCase(), card]),
+        );
         state.cards = state.cards.map((card) => {
           const taggedCard = taggedByName.get(card.name.toLowerCase());
           if (!taggedCard) return card;
@@ -706,7 +732,9 @@
       if (validCards.length > 0) {
         mergeCards(validCards);
         state.cards = state.cards.map((card) => {
-          const validCard = validCards.find((item) => item.name.toLowerCase() === card.name.toLowerCase());
+          const validCard = validCards.find(
+            (item) => item.name.toLowerCase() === card.name.toLowerCase(),
+          );
           if (!validCard) return card;
           return {
             ...card,

@@ -1,0 +1,25 @@
+name: JavaScript Format
+
+on:
+  push:
+    paths:
+      - "frontend/public/app.js"
+      - ".github/workflows/javascript-format.yml"
+  pull_request:
+    paths:
+      - "frontend/public/app.js"
+      - ".github/workflows/javascript-format.yml"
+
+jobs:
+  prettier:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Check JavaScript formatting
+        run: npx --yes prettier@3.6.2 --check frontend/public/app.js
