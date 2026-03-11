@@ -1,8 +1,10 @@
 """Build graph node/edge tensors from deck, combo, and tag datasets."""
 
+import sys
 import json
 import math
 import heapq
+from pathlib import Path
 from dataclasses import dataclass
 from collections import Counter, defaultdict
 from itertools import combinations
@@ -14,6 +16,10 @@ from vector_database import VectorDatabase
 from card_data import CardFields
 
 from config import CONFIG
+
+BACKEND_DIR = Path(__file__).resolve().parents[1]
+if str(BACKEND_DIR) not in sys.path:
+    sys.path.insert(0, str(BACKEND_DIR))
 
 @dataclass(frozen=True)
 class Config:
