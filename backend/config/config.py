@@ -5,7 +5,7 @@ from typing import Dict
 
 def load_config() -> Dict[str, Dict[str, str]]:
     """Load Config from JSON"""
-    with open("config/config.json", "r", encoding="utf-8") as f:
+    with open("backend/config/config.json", "r", encoding="utf-8") as f:
         raw = json.load(f)
     return raw
 
