@@ -108,7 +108,6 @@
     return parsed;
   }
 
-<<<<<<< HEAD
   function reportError(context, err) {
     console.error(context, err);
   }
@@ -133,9 +132,6 @@
     }
     return parsed;
   }
-
-=======
->>>>>>> origin/eng
   function parseImportLine(line) {
     const trimmed = line.trim();
     if (!trimmed) return null;
@@ -413,7 +409,6 @@
     return `https://api.scryfall.com/cards/${encodeURIComponent(cardId)}?format=image&version=normal`;
   }
 
-<<<<<<< HEAD
   async function fetchCardImages(names) {
     if (!Array.isArray(names) || names.length === 0) {
       return { found: {}, missing: {} };
@@ -450,27 +445,11 @@
 
     state.metaCache[name] = meta;
     state.metaCache[meta.name] = meta;
-=======
-  async function loadCardMeta(name) {
-    if (state.metaCache[name]) {
-      return state.metaCache[name];
-    }
-    const data = await callApi({
-      path: `/get_vector_description/${encodeURIComponent(name)}`,
-      method: "GET",
-    });
-    const meta = {
-      name: data.card_name || name,
-      cardId: data.card_id || "",
-    };
-    state.metaCache[name] = meta;
->>>>>>> origin/eng
     return meta;
   }
 
   async function validateAndTagCard(item) {
     const meta = await callApi({
-<<<<<<< HEAD
       path: "/get_vector_description",
       method: "POST",
       body: { id: item.name },
@@ -479,15 +458,6 @@
       path: "/get_tags",
       method: "POST",
       body: { id: item.name, threshold: 0.5, top_k: 8 },
-=======
-      path: `/get_vector_description/${encodeURIComponent(item.name)}`,
-      method: "GET",
-    });
-    const tagData = await callApi({
-      path: `/get_tags/${encodeURIComponent(item.name)}`,
-      method: "GET",
-      query: { threshold: 0.5, top_k: 8 },
->>>>>>> origin/eng
     });
     const normalized = normalizeTagPayload(
       tagData.predicted,
@@ -509,7 +479,6 @@
     };
   }
 
-<<<<<<< HEAD
   async function enrichCards(items) {
     if (!Array.isArray(items) || items.length === 0) {
       return { cards: [], missing: [] };
@@ -567,9 +536,6 @@
 
     return { cards, missing };
   }
-
-=======
->>>>>>> origin/eng
   function showPreview(card, event) {
     els.cardPreview.hidden = false;
     els.cardPreview.dataset.cardName = card.name;
@@ -587,11 +553,7 @@
         )
           return;
         els.cardPreviewName.textContent = meta.name || card.name;
-<<<<<<< HEAD
         const imageUrl = meta.imageUrls?.[0] || imageUrlFromCardId(meta.cardId);
-=======
-        const imageUrl = imageUrlFromCardId(meta.cardId);
->>>>>>> origin/eng
         if (!imageUrl) {
           els.cardPreviewImage.dataset.state = "missing";
           return;
@@ -717,12 +679,8 @@
       if (requestId !== state.analysisRequestId) return;
       els.analysisMeta.textContent = "Analysis failed.";
       if (settings.showBusy) {
-<<<<<<< HEAD
         reportError("runAnalysis failed", err);
         setStatus("Analysis failed.", "error");
-=======
-        setStatus(String(err), "error");
->>>>>>> origin/eng
       }
     } finally {
       if (settings.showBusy) setBusy(false);
@@ -750,14 +708,9 @@
     setBusy(true, "Generating deck...");
     try {
       const data = await callApi({
-<<<<<<< HEAD
         path: "/generate_deck",
         method: "POST",
         body: { id: commander },
-=======
-        path: `/generate_deck/${encodeURIComponent(commander)}`,
-        method: "GET",
->>>>>>> origin/eng
       });
 
       const deckCounts = Array.isArray(data) ? data[0] : data;
@@ -783,15 +736,8 @@
         generatedCards.push({ name, quantity: Math.floor(q) });
       });
 
-<<<<<<< HEAD
       const enriched = await enrichCards(generatedCards);
       enriched.cards.forEach((card) => {
-=======
-      const taggedGenerated = await Promise.all(
-        generatedCards.map(validateAndTagCard),
-      );
-      taggedGenerated.forEach((card) => {
->>>>>>> origin/eng
         state.cards.push({
           id: uid(),
           name: card.name,
@@ -801,27 +747,19 @@
         });
       });
 
-<<<<<<< HEAD
       if (enriched.missing.length > 0) {
         console.warn(
           "Skipped generated cards missing metadata or tags.",
           enriched.missing,
         );
       }
-
-=======
->>>>>>> origin/eng
       renderTagFilter();
       renderRows();
       await runAnalysis({ immediate: true, showBusy: false });
       setStatus("Deck generated and analyzed.", "success");
     } catch (err) {
-<<<<<<< HEAD
       reportError("generateDeck failed", err);
       setStatus("Deck generation failed.", "error");
-=======
-      setStatus(String(err), "error");
->>>>>>> origin/eng
     } finally {
       setBusy(false);
     }
@@ -837,15 +775,9 @@
     setBusy(true, "Adding similar cards...");
     try {
       const data = await callApi({
-<<<<<<< HEAD
         path: "/get_similar_vectors",
         method: "POST",
         body: { id: commander, num_vectors: 30 },
-=======
-        path: `/get_similar_vectors/${encodeURIComponent(commander)}`,
-        method: "GET",
-        query: { num_vectors: 30 },
->>>>>>> origin/eng
       });
 
       const existing = new Set(state.cards.map((c) => c.name.toLowerCase()));
@@ -861,15 +793,9 @@
       mergeCards(additions);
       const untagged = state.cards.filter((card) => !card.primaryTag);
       if (untagged.length > 0) {
-<<<<<<< HEAD
         const enriched = await enrichCards(untagged);
         const taggedByName = new Map(
           enriched.cards.map((card) => [card.name.toLowerCase(), card]),
-=======
-        const tagged = await Promise.all(untagged.map(validateAndTagCard));
-        const taggedByName = new Map(
-          tagged.map((card) => [card.name.toLowerCase(), card]),
->>>>>>> origin/eng
         );
         state.cards = state.cards.map((card) => {
           const taggedCard = taggedByName.get(card.name.toLowerCase());
@@ -881,27 +807,20 @@
             primaryTag: taggedCard.primaryTag,
           };
         });
-<<<<<<< HEAD
         if (enriched.missing.length > 0) {
           console.warn(
             "Skipped similar cards missing metadata or tags.",
             enriched.missing,
           );
         }
-=======
->>>>>>> origin/eng
       }
       renderTagFilter();
       renderRows();
       scheduleAnalysis(true);
       setStatus(`Added ${additions.length} similar cards.`, "success");
     } catch (err) {
-<<<<<<< HEAD
       reportError("completeDeck failed", err);
       setStatus("Adding similar cards failed.", "error");
-=======
-      setStatus(String(err), "error");
->>>>>>> origin/eng
     } finally {
       setBusy(false);
     }
@@ -1010,16 +929,10 @@
       app.hidden = false;
       initAuthenticated(session.user || {});
     } catch (err) {
-<<<<<<< HEAD
       reportError("init failed", err);
       loginShell.hidden = false;
       app.hidden = true;
       setStatus("Initialization failed.", "error");
-=======
-      loginShell.hidden = false;
-      app.hidden = true;
-      setStatus(String(err), "error");
->>>>>>> origin/eng
     }
   }
 

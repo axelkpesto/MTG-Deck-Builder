@@ -382,10 +382,6 @@ def get_vector():
     """Get a vector by card id/name."""
     data = request.get_json(silent=True) or {}
     try:
-<<<<<<< HEAD:vector_db_server.py
-<<<<<<< Updated upstream:vector_db_server.py
-        vector = vd.find_vector(format_id(v_id))
-=======
         v_id = parse_required_card_id(data)
     except ValueError as e:
         return error(str(e), 400, received=data)
@@ -393,10 +389,6 @@ def get_vector():
     try:
         card_id = resolve_card_id(v_id)
         vector = vd.get(card_id)
->>>>>>> Stashed changes:backend/vector_db_server.py
-=======
-        vector = vd.get(format_id(v_id))
->>>>>>> origin/eng:backend/vector_db_server.py
     except KeyError:
         return error("id not found", 400, requested_id=v_id)
     return jsonify(
@@ -414,22 +406,12 @@ def get_vector_description():
     """Get decoded vector metadata by card id/name."""
     data = request.get_json(silent=True) or {}
     try:
-<<<<<<< HEAD:vector_db_server.py
-<<<<<<< Updated upstream:vector_db_server.py
-        vector_id = vd.find_id(format_id(v_id))
-=======
         v_id = parse_required_card_id(data)
     except ValueError as e:
         return error(str(e), 400, received=data)
 
     try:
         vector_id = resolve_card_id(v_id)
->>>>>>> Stashed changes:backend/vector_db_server.py
-=======
-        vector_id = format_id(v_id)
-        if vector_id not in vd:
-            raise KeyError(vector_id)
->>>>>>> origin/eng:backend/vector_db_server.py
     except KeyError:
         return error("id not found", 400, requested_id=v_id)
 
@@ -487,20 +469,12 @@ def get_similar_vectors():
     """Get nearest-neighbor vectors for a requested id."""
     data = request.get_json(silent=True) or {}
     try:
-<<<<<<< HEAD:vector_db_server.py
-<<<<<<< Updated upstream:vector_db_server.py
-        vector = vd.find_vector(format_id(v_id))
-=======
         v_id = parse_required_card_id(data)
     except ValueError as e:
         return error(str(e), 400, received=data)
 
     try:
         vector = vd.get(resolve_card_id(v_id))
->>>>>>> Stashed changes:backend/vector_db_server.py
-=======
-        vector = vd.get(format_id(v_id))
->>>>>>> origin/eng:backend/vector_db_server.py
     except KeyError:
         return error("id not found", 400, requested_id=v_id)
 
@@ -530,20 +504,12 @@ def get_tags():
     """Predict tags for a stored vector by id."""
     data = request.get_json(silent=True) or {}
     try:
-<<<<<<< HEAD:vector_db_server.py
-<<<<<<< Updated upstream:vector_db_server.py
-        vector = vd.find_vector(format_id(v_id))
-=======
         v_id = parse_required_card_id(data)
     except ValueError as e:
         return error(str(e), 400, received=data)
 
     try:
         card_id = resolve_card_id(v_id)
->>>>>>> Stashed changes:backend/vector_db_server.py
-=======
-        vector = vd.get(format_id(v_id))
->>>>>>> origin/eng:backend/vector_db_server.py
     except KeyError:
         return error("id not found", 400, requested_id=v_id)
 
@@ -616,22 +582,12 @@ def generate_deck():
     """Generate a deck from a requested commander id."""
     data = request.get_json(silent=True) or {}
     try:
-<<<<<<< HEAD:vector_db_server.py
-<<<<<<< Updated upstream:vector_db_server.py
-        card = vd.find_id(format_id(v_id))
-=======
         v_id = parse_required_card_id(data)
     except ValueError as e:
         return error(str(e), 400, received=data)
 
     try:
         card = resolve_card_id(v_id)
->>>>>>> Stashed changes:backend/vector_db_server.py
-=======
-        card = format_id(v_id)
-        if card not in vd:
-            raise KeyError(card)
->>>>>>> origin/eng:backend/vector_db_server.py
     except KeyError:
         return error("id not found", 400, requested_id=v_id)
 
