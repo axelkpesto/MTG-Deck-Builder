@@ -6,8 +6,12 @@ from typing import Dict
 
 def load_config() -> Dict[str, Dict[str, str]]:
     """Load Config from JSON"""
+<<<<<<< HEAD:config/config.py
     config_path = Path(__file__).with_name("config.json")
     with open(config_path, "r", encoding="utf-8") as f:
+=======
+    with open("backend/config/config.json", "r", encoding="utf-8") as f:
+>>>>>>> origin/eng:backend/config/config.py
         raw = json.load(f)
     return raw
 

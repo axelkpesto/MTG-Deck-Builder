@@ -5,7 +5,7 @@ FROM python:3.12-slim
 ENV PYTHONUNBUFFERED True
 
 # Copy local code to the container image.
-ENV APP_HOME /back-end
+ENV APP_HOME /backend
 WORKDIR $APP_HOME
 COPY . ./
 

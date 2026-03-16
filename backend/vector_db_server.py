@@ -29,7 +29,7 @@ from config import CONFIG
 app = Flask(__name__)
 load_dotenv()
 CORS(app)
-app.config["DEBUG"] = os.environ.get("FLASK_DEBUG", 0)
+app.config["DEBUG"] = bool(int(os.environ.get("FLASK_DEBUG", 0)))
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("vector-db-server")
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -79,6 +79,8 @@ limiter = Limiter(
     default_limits=[DEFAULT_RATE_LIMIT],
     storage_uri=os.environ.get("REDIS_URL", ""),
 )
+
+auth_enabled = bool(int(os.environ.get("AUTHENTICATE", 1)))
 
 def error(message: str, status: int = 400, **extra: Any):
     """Return a consistent JSON error payload."""
@@ -159,6 +161,9 @@ def _start_timer():
 @app.before_request
 def _authenticate_api_key():
     """Authenticate API key for protected endpoints."""
+    if not auth_enabled:
+        return None
+    
     if request.path in ["/", "/help", "/examples", "/status"]:
         return None
 
@@ -168,7 +173,7 @@ def _authenticate_api_key():
 
     if api_key == g.get("last_raw"):
         return None
-
+    
     info = authenticate_api_key(api_key)
     if not info:
         return error("invalid or expired API key", 403)
@@ -377,6 +382,7 @@ def get_vector():
     """Get a vector by card id/name."""
     data = request.get_json(silent=True) or {}
     try:
+<<<<<<< HEAD:vector_db_server.py
 <<<<<<< Updated upstream:vector_db_server.py
         vector = vd.find_vector(format_id(v_id))
 =======
@@ -388,6 +394,9 @@ def get_vector():
         card_id = resolve_card_id(v_id)
         vector = vd.get(card_id)
 >>>>>>> Stashed changes:backend/vector_db_server.py
+=======
+        vector = vd.get(format_id(v_id))
+>>>>>>> origin/eng:backend/vector_db_server.py
     except KeyError:
         return error("id not found", 400, requested_id=v_id)
     return jsonify(
@@ -405,6 +414,7 @@ def get_vector_description():
     """Get decoded vector metadata by card id/name."""
     data = request.get_json(silent=True) or {}
     try:
+<<<<<<< HEAD:vector_db_server.py
 <<<<<<< Updated upstream:vector_db_server.py
         vector_id = vd.find_id(format_id(v_id))
 =======
@@ -415,6 +425,11 @@ def get_vector_description():
     try:
         vector_id = resolve_card_id(v_id)
 >>>>>>> Stashed changes:backend/vector_db_server.py
+=======
+        vector_id = format_id(v_id)
+        if vector_id not in vd:
+            raise KeyError(vector_id)
+>>>>>>> origin/eng:backend/vector_db_server.py
     except KeyError:
         return error("id not found", 400, requested_id=v_id)
 
@@ -472,6 +487,7 @@ def get_similar_vectors():
     """Get nearest-neighbor vectors for a requested id."""
     data = request.get_json(silent=True) or {}
     try:
+<<<<<<< HEAD:vector_db_server.py
 <<<<<<< Updated upstream:vector_db_server.py
         vector = vd.find_vector(format_id(v_id))
 =======
@@ -482,6 +498,9 @@ def get_similar_vectors():
     try:
         vector = vd.get(resolve_card_id(v_id))
 >>>>>>> Stashed changes:backend/vector_db_server.py
+=======
+        vector = vd.get(format_id(v_id))
+>>>>>>> origin/eng:backend/vector_db_server.py
     except KeyError:
         return error("id not found", 400, requested_id=v_id)
 
@@ -511,6 +530,7 @@ def get_tags():
     """Predict tags for a stored vector by id."""
     data = request.get_json(silent=True) or {}
     try:
+<<<<<<< HEAD:vector_db_server.py
 <<<<<<< Updated upstream:vector_db_server.py
         vector = vd.find_vector(format_id(v_id))
 =======
@@ -521,6 +541,9 @@ def get_tags():
     try:
         card_id = resolve_card_id(v_id)
 >>>>>>> Stashed changes:backend/vector_db_server.py
+=======
+        vector = vd.get(format_id(v_id))
+>>>>>>> origin/eng:backend/vector_db_server.py
     except KeyError:
         return error("id not found", 400, requested_id=v_id)
 
@@ -593,6 +616,7 @@ def generate_deck():
     """Generate a deck from a requested commander id."""
     data = request.get_json(silent=True) or {}
     try:
+<<<<<<< HEAD:vector_db_server.py
 <<<<<<< Updated upstream:vector_db_server.py
         card = vd.find_id(format_id(v_id))
 =======
@@ -603,6 +627,11 @@ def generate_deck():
     try:
         card = resolve_card_id(v_id)
 >>>>>>> Stashed changes:backend/vector_db_server.py
+=======
+        card = format_id(v_id)
+        if card not in vd:
+            raise KeyError(card)
+>>>>>>> origin/eng:backend/vector_db_server.py
     except KeyError:
         return error("id not found", 400, requested_id=v_id)
 
@@ -655,12 +684,20 @@ def predict_from_vector(vec_np: np.ndarray, threshold: float, top_k: int = 8):
     logits = model(x)
     probs = torch.sigmoid(logits).float().cpu().numpy()[0]
 
-    pred_idxs = np.where(probs >= threshold)[0]
-    predicted = [class_names[i] for i in pred_idxs.tolist()]
-
     tk = max(1, top_k)
     top_idx = np.argsort(probs)[-tk:][::-1]
     scores = [{"tag": class_names[i], "score": float(probs[i])} for i in top_idx]
+
+    pred_idxs = np.where(probs >= threshold)[0]
+    predicted_scores = sorted(
+        (
+            {"tag": class_names[i], "score": float(probs[i])}
+            for i in pred_idxs.tolist()
+        ),
+        key=lambda item: item["score"],
+        reverse=True,
+    )
+    predicted = [item["tag"] for item in predicted_scores]
 
     if not predicted:
         predicted = [s["tag"] for s in scores]
