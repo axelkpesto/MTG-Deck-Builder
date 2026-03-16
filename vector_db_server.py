@@ -1,8 +1,11 @@
 """Flask server exposing vector, tagging, and deck-generation endpoints."""
 
+
+#Make all requests as post requests
 import json
 import logging
 import os
+import threading
 import time
 from typing import Any
 
@@ -45,6 +48,29 @@ with open(CONFIG.datasets["TAGS_DATASET_PATH"], "r", encoding="utf-8") as f:
     tag_dataset = json.load(f)
 
 gen = DeckGenBundle.load(paths=DeckGenPaths(), device=str(device), vector_db=vd)
+
+def load_deckgen_assets() -> None:
+    """Warm cached deck-generation tensors without blocking server startup."""
+    warmup_enabled = bool(int(os.environ.get("DECKGEN_WARMUP", "1")))
+    if not warmup_enabled:
+        logger.info("Deck generation warmup disabled.")
+        return
+
+    if device.type == "cuda" and not bool(int(os.environ.get("DECKGEN_WARMUP_ON_CUDA", "0"))):
+        logger.info("Skipping deck generation warmup on CUDA device.")
+        return
+
+    try:
+        gen.get_node_embeddings()
+        logger.info("Deck generation embeddings warmed.")
+    except torch.OutOfMemoryError as e:
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+        logger.warning("Deck generation warmup skipped after CUDA OOM: %s", e)
+    except (RuntimeError, ValueError, OSError) as e:
+        logger.warning("Deck generation warmup failed: %s", e)
+
+threading.Thread(target=load_deckgen_assets, daemon=True).start()
 DEFAULT_RATE_LIMIT = "120 per minute"
 
 limiter = Limiter(
@@ -66,6 +92,48 @@ def clamp_int(x: int, lo: int, hi: int) -> int:
 def clamp_float(x: float, lo: float, hi: float) -> float:
     """Clamp a float to the inclusive range [lo, hi]."""
     return max(lo, min(hi, x))
+
+
+def resolve_card_id(v_id: str) -> str:
+    """Resolve a user-supplied card name to a canonical vector id."""
+    raw = v_id.strip()
+    if not raw:
+        raise KeyError(v_id)
+    if raw in vd:
+        return raw
+
+    formatted = format_id(raw)
+    if formatted in vd:
+        return formatted
+
+    return vd.find_id(raw)
+
+
+def parse_card_list_payload(data: dict[str, Any]) -> list[str]:
+    """Validate and normalize a request body containing card names."""
+    cards = data.get("cards")
+    if not isinstance(cards, list) or not all(isinstance(c, str) for c in cards):
+        raise ValueError("JSON body must include 'cards': ['Card Name', ...]")
+    cleaned = [c.strip() for c in cards if c.strip()]
+    if not cleaned:
+        raise ValueError("cards list cannot be empty")
+    return cleaned
+
+
+def parse_required_card_id(data: dict[str, Any], field_name: str = "id") -> str:
+    """Validate and normalize a request body containing a single card id/name."""
+    value = data.get(field_name)
+    if not isinstance(value, str) or not value.strip():
+        raise ValueError(f"JSON body must include '{field_name}': 'Card Name'")
+    return value.strip()
+
+
+def predict_tags_for_card(card_id: str, threshold: float, top_k: int) -> dict[str, Any]:
+    """Predict tags for one canonical card id."""
+    vector = vd.get(card_id)
+    vec_np = VectorDatabase.vector_to_numpy(vector)
+    result = predict_from_vector(vec_np, threshold, top_k)
+    return result
 
 def get_api_key_from_request(req) -> str | None:
     """Extract API key from bearer token or X-API-KEY header."""
@@ -150,20 +218,57 @@ def help_route():
     """Return endpoint documentation for the API."""
     return jsonify({
         "endpoints": {
-            "/get_vector/STR": "Get the vector for the given id",
-            "/get_vector_description/STR": "Get the description for the given id",
-            "/get_random_vector": "Get a random vector from the database",
-            "/get_random_vector_description": (
-                "Get the description for a random vector from the database"
-            ),
-            "/get_similar_vectors/STR?num_vectors=INT": (
-                "Get the most similar vectors to the given id, "
-                "num_vectors is optional and defaults to 5"
-            ),
-            "/get_tags/STR?threshold=FLOAT&top_k=INT": (
-                "Get the tags for the given id, threshold and top_k are "
-                "optional and default to 0.5 and 8 respectively"
-            ),
+            "/status": {
+                "method": "POST",
+                "body": {},
+                "description": "Return service health status.",
+            },
+            "/get_vector": {
+                "method": "POST",
+                "body": {"id": "Card Name"},
+                "description": "Get the vector for the given id.",
+            },
+            "/get_vector_description": {
+                "method": "POST",
+                "body": {"id": "Card Name"},
+                "description": "Get the description for the given id.",
+            },
+            "/get_vector_descriptions": {
+                "method": "POST",
+                "body": {"cards": ["Card Name", "..."]},
+                "description": "Get descriptions for a list of ids.",
+            },
+            "/get_random_vector": {
+                "method": "POST",
+                "body": {},
+                "description": "Get a random vector from the database.",
+            },
+            "/get_random_vector_description": {
+                "method": "POST",
+                "body": {},
+                "description": "Get the description for a random vector from the database.",
+            },
+            "/get_similar_vectors": {
+                "method": "POST",
+                "body": {"id": "Card Name", "num_vectors": 10},
+                "description": (
+                    "Get the most similar vectors to the given id, "
+                    "num_vectors is optional and defaults to 5."
+                ),
+            },
+            "/get_tags": {
+                "method": "POST",
+                "body": {"id": "Card Name", "threshold": 0.5, "top_k": 8},
+                "description": (
+                    "Get the tags for the given id, threshold and top_k are "
+                    "optional and default to 0.5 and 8 respectively."
+                ),
+            },
+            "/get_tag_list": {
+                "method": "POST",
+                "body": {"cards": ["Card Name", "..."], "threshold": 0.5, "top_k": 8},
+                "description": "Get tags for a list of ids.",
+            },
             "/get_tags_from_vector": {
                 "method": "POST",
                 "body": {"vector": ["number", "..."], "threshold": 0.5, "top_k": 8},
@@ -177,6 +282,11 @@ def help_route():
                 "body": {"commander": "Card Name", "cards": ["Card Name", "..."]},
                 "description": "Analyze a deck and return SimpleDeckAnalyzer metrics.",
             },
+            "/generate_deck": {
+                "method": "POST",
+                "body": {"id": "Commander Name"},
+                "description": "Generate a deck for the given commander id.",
+            },
         }
     })
 
@@ -185,20 +295,46 @@ def examples():
     """Return example requests for the API."""
     return jsonify({
         "examples": {
-            "/get_vector/Magnus the Red": "Get the vector for the given id",
-            "/get_vector_description/Magnus the Red": "Get the description for the given id",
-            "/get_random_vector": "Get a random vector from the database",
-            "/get_random_vector_description": (
-                "Get the description for a random vector from the database"
-            ),
-            "/get_similar_vectors/Magnus the Red?num_vectors=10": (
-                "Get the most similar vectors to the given id, "
-                "num_vectors is optional and defaults to 5"
-            ),
-            "/get_tags/Magnus the Red?threshold=0.5&top_k=8": (
-                "Get the tags for the given id, threshold and top_k are optional "
-                "and default to 0.5 and 8 respectively"
-            ),
+            "/status": {
+                "method": "POST",
+                "body": {},
+            },
+            "/get_vector": {
+                "method": "POST",
+                "body": {"id": "Magnus the Red"},
+            },
+            "/get_vector_description": {
+                "method": "POST",
+                "body": {"id": "Magnus the Red"},
+            },
+            "/get_vector_descriptions": {
+                "method": "POST",
+                "body": {"cards": ["Magnus the Red", "Sol Ring"]},
+            },
+            "/get_random_vector": {
+                "method": "POST",
+                "body": {},
+            },
+            "/get_random_vector_description": {
+                "method": "POST",
+                "body": {},
+            },
+            "/get_similar_vectors": {
+                "method": "POST",
+                "body": {"id": "Magnus the Red", "num_vectors": 10},
+            },
+            "/get_tags": {
+                "method": "POST",
+                "body": {"id": "Magnus the Red", "threshold": 0.5, "top_k": 8},
+            },
+            "/get_tag_list": {
+                "method": "POST",
+                "body": {
+                    "cards": ["Magnus the Red", "Sol Ring"],
+                    "threshold": 0.5,
+                    "top_k": 8,
+                },
+            },
             "/get_tags_from_vector": {
                 "method": "POST",
                 "body": {"vector": ["number", "..."], "threshold": 0.5, "top_k": 8},
@@ -215,10 +351,14 @@ def examples():
                 },
                 "description": "Analyze a deck list and return deck statistics.",
             },
+            "/generate_deck": {
+                "method": "POST",
+                "body": {"id": "Magnus the Red"},
+            },
         }
     })
 
-@app.route('/status', methods=['GET'])
+@app.route('/status', methods=['POST'])
 def health():
     """Return service health status."""
     healthy = (model is not None) and (vd is not None) and len(vd) > 0
@@ -229,39 +369,82 @@ def health():
         "vd_size": len(vd) if vd is not None else 0,
     })
 
-#Example Request:
-#(Invoke-RestMethod -Uri "http://127.0.0.1:5000/get_vector/Shunt")
-@app.route('/get_vector/<string:v_id>', methods=['GET'])
+# Example Request:
+# Invoke-RestMethod -Method Post -Uri "http://127.0.0.1:5000/get_vector" -ContentType "application/json" -Body '{"id":"Shunt"}'
+@app.route('/get_vector', methods=['POST'])
 @limiter.limit(set_limit)
-def get_vector(v_id):
+def get_vector():
     """Get a vector by card id/name."""
+    data = request.get_json(silent=True) or {}
     try:
+<<<<<<< Updated upstream:vector_db_server.py
         vector = vd.find_vector(format_id(v_id))
+=======
+        v_id = parse_required_card_id(data)
+    except ValueError as e:
+        return error(str(e), 400, received=data)
+
+    try:
+        card_id = resolve_card_id(v_id)
+        vector = vd.get(card_id)
+>>>>>>> Stashed changes:backend/vector_db_server.py
     except KeyError:
         return error("id not found", 400, requested_id=v_id)
     return jsonify(
         {
-            "id": format_id(v_id),
+            "id": card_id,
             "vector": vector.tolist() if vector is not None else None,
         }
     )
 
-#Example Request:
-#(Invoke-RestMethod -Uri "http://127.0.0.1:5000/get_vector_description/Shunt")
-@app.route('/get_vector_description/<string:v_id>', methods=['GET'])
+# Example Request:
+# Invoke-RestMethod -Method Post -Uri "http://127.0.0.1:5000/get_vector_description" -ContentType "application/json" -Body '{"id":"Shunt"}'
+@app.route('/get_vector_description', methods=['POST'])
 @limiter.limit(set_limit)
-def get_vector_description(v_id):
+def get_vector_description():
     """Get decoded vector metadata by card id/name."""
+    data = request.get_json(silent=True) or {}
     try:
+<<<<<<< Updated upstream:vector_db_server.py
         vector_id = vd.find_id(format_id(v_id))
+=======
+        v_id = parse_required_card_id(data)
+    except ValueError as e:
+        return error(str(e), 400, received=data)
+
+    try:
+        vector_id = resolve_card_id(v_id)
+>>>>>>> Stashed changes:backend/vector_db_server.py
     except KeyError:
         return error("id not found", 400, requested_id=v_id)
 
     return jsonify(vd.get_vector_description_dict(vector_id))
 
-#Example Request:
-#curl http://127.0.0.1:5000/get_random_vector
-@app.route('/get_random_vector', methods=['GET'])
+
+@app.route('/get_vector_descriptions', methods=['POST'])
+@limiter.limit(set_limit)
+def get_vector_descriptions():
+    """Get decoded vector metadata for a list of card names."""
+    data = request.get_json(silent=True) or {}
+    try:
+        cards = parse_card_list_payload(data)
+    except ValueError as e:
+        return error(str(e), 400, received=data)
+
+    found: dict[str, dict[str, Any]] = {}
+    missing: dict[str, dict[str, str]] = {}
+    for name in cards:
+        try:
+            card_id = resolve_card_id(name)
+            found[name] = vd.get_vector_description_dict(card_id)
+        except KeyError:
+            missing[name] = {"error": "id not found", "requested_id": name}
+
+    return jsonify({"found": found, "missing": missing})
+
+# Example Request:
+# curl -X POST http://127.0.0.1:5000/get_random_vector
+@app.route('/get_random_vector', methods=['POST'])
 @limiter.limit(set_limit)
 def get_random_vector():
     """Get a random vector from the database."""
@@ -273,32 +456,42 @@ def get_random_vector():
         }
     )
 
-#Example Request:
-#(Invoke-RestMethod -Uri "http://127.0.0.1:5000/get_random_vector_description")
-@app.route('/get_random_vector_description', methods=['GET'])
+# Example Request:
+# Invoke-RestMethod -Method Post -Uri "http://127.0.0.1:5000/get_random_vector_description"
+@app.route('/get_random_vector_description', methods=['POST'])
 @limiter.limit(set_limit)
 def get_random_vector_description():
     """Get decoded metadata for a random vector."""
     return jsonify(vd.get_vector_description_dict(vd.get_random_vector()[0]))
 
-#Example Request:
-#(Invoke-RestMethod -Uri "http://127.0.0.1:5000/get_similar_vectors/Shunt?num_vectors=10")
-@app.route('/get_similar_vectors/<string:v_id>', methods=['GET'])
+# Example Request:
+# Invoke-RestMethod -Method Post -Uri "http://127.0.0.1:5000/get_similar_vectors" -ContentType "application/json" -Body '{"id":"Shunt","num_vectors":10}'
+@app.route('/get_similar_vectors', methods=['POST'])
 @limiter.limit(set_limit)
-def get_similar_vectors(v_id):
+def get_similar_vectors():
     """Get nearest-neighbor vectors for a requested id."""
+    data = request.get_json(silent=True) or {}
     try:
+<<<<<<< Updated upstream:vector_db_server.py
         vector = vd.find_vector(format_id(v_id))
+=======
+        v_id = parse_required_card_id(data)
+    except ValueError as e:
+        return error(str(e), 400, received=data)
+
+    try:
+        vector = vd.get(resolve_card_id(v_id))
+>>>>>>> Stashed changes:backend/vector_db_server.py
     except KeyError:
         return error("id not found", 400, requested_id=v_id)
 
     try:
-        num_vectors = request.args.get('num_vectors', default=5, type=int)
-    except ValueError:
+        num_vectors = int(data.get("num_vectors", 5))
+    except (TypeError, ValueError):
         return error(
             "num_vectors must be an integer",
             400,
-            quantity=request.args.get("num_vectors"),
+            quantity=data.get("num_vectors"),
         )
 
     num_vectors = clamp_int(num_vectors, 1, 1000)
@@ -310,32 +503,70 @@ def get_similar_vectors(v_id):
 
     return jsonify(results)
 
-# curl "http://127.0.0.1:5000/get_tags/Magnus the Red?threshold=0.55&top_k=8"
-@app.route('/get_tags/<string:v_id>', methods=['GET'])
+# Example Request:
+# curl -X POST "http://127.0.0.1:5000/get_tags" -H "Content-Type: application/json" -d "{\"id\":\"Magnus the Red\",\"threshold\":0.55,\"top_k\":8}"
+@app.route('/get_tags', methods=['POST'])
 @limiter.limit(set_limit)
-def get_tags(v_id):
+def get_tags():
     """Predict tags for a stored vector by id."""
+    data = request.get_json(silent=True) or {}
     try:
+<<<<<<< Updated upstream:vector_db_server.py
         vector = vd.find_vector(format_id(v_id))
+=======
+        v_id = parse_required_card_id(data)
+    except ValueError as e:
+        return error(str(e), 400, received=data)
+
+    try:
+        card_id = resolve_card_id(v_id)
+>>>>>>> Stashed changes:backend/vector_db_server.py
     except KeyError:
         return error("id not found", 400, requested_id=v_id)
 
     try:
-        threshold = request.args.get('threshold', default=0.5, type=float)
-        top_k = request.args.get('top_k', default=8, type=int)
-    except ValueError:
+        threshold = float(data.get("threshold", 0.5))
+        top_k = int(data.get("top_k", 8))
+    except (TypeError, ValueError):
         return error(
             "threshold and top_k must be numbers",
             400,
-            threshold=request.args.get("threshold"),
-            top_k=request.args.get("top_k"),
+            threshold=data.get("threshold"),
+            top_k=data.get("top_k"),
         )
+    threshold = clamp_float(threshold, 0.0, 1.0)
+    top_k = clamp_int(top_k, 1, 1000)
+    return jsonify(predict_tags_for_card(card_id, threshold, top_k))
 
-    vec_np = VectorDatabase.vector_to_numpy(vector)
+
+@app.route('/get_tag_list', methods=['POST'])
+@limiter.limit(set_limit)
+def get_tag_list():
+    """Predict tags for a list of card names."""
+    data = request.get_json(silent=True) or {}
+    try:
+        cards = parse_card_list_payload(data)
+        threshold = float(data.get("threshold", 0.5))
+        top_k = int(data.get("top_k", 8))
+    except (TypeError, ValueError):
+        return error("Invalid cards/threshold/top_k types", 400, received=data)
 
     threshold = clamp_float(threshold, 0.0, 1.0)
     top_k = clamp_int(top_k, 1, 1000)
-    return jsonify(predict_from_vector(vec_np, threshold, top_k))
+
+    found: dict[str, dict[str, Any]] = {}
+    missing: dict[str, dict[str, str]] = {}
+    for name in cards:
+        try:
+            card_id = resolve_card_id(name)
+            found[name] = {
+                "card_id": card_id,
+                **predict_tags_for_card(card_id, threshold, top_k),
+            }
+        except KeyError:
+            missing[name] = {"error": "id not found", "requested_id": name}
+
+    return jsonify({"found": found, "missing": missing})
 
 @app.route('/get_tags_from_vector', methods=['POST'])
 @limiter.limit(set_limit)
@@ -356,12 +587,22 @@ def get_tags_from_vector():
     top_k = clamp_int(top_k, 1, 1000)
     return jsonify(predict_from_vector(vec_np, threshold, top_k))
 
-@app.route('/generate_deck/<string:v_id>', methods=['GET'])
+@app.route('/generate_deck', methods=['POST'])
 @limiter.limit(set_limit)
-def generate_deck(v_id):
+def generate_deck():
     """Generate a deck from a requested commander id."""
+    data = request.get_json(silent=True) or {}
     try:
+<<<<<<< Updated upstream:vector_db_server.py
         card = vd.find_id(format_id(v_id))
+=======
+        v_id = parse_required_card_id(data)
+    except ValueError as e:
+        return error(str(e), 400, received=data)
+
+    try:
+        card = resolve_card_id(v_id)
+>>>>>>> Stashed changes:backend/vector_db_server.py
     except KeyError:
         return error("id not found", 400, requested_id=v_id)
 
@@ -436,7 +677,7 @@ if __name__ == '__main__':
     API_KEY = os.environ.get("FIREBASE_API_KEY", "")
     URL = "http://127.0.0.1:5000/get_random_vector"
 
-    response = requests.get(
+    response = requests.post(
         URL,
         headers={"x-api-key": API_KEY},
         timeout=10,

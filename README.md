@@ -96,17 +96,19 @@ Public (no API key required):
 - `GET /`
 - `GET /help`
 - `GET /examples`
-- `GET /status`
+- `POST /status`
 
 Authenticated routes (API key required):
-- `GET /get_vector/<v_id>`
-- `GET /get_vector_description/<v_id>`
-- `GET /get_random_vector`
-- `GET /get_random_vector_description`
-- `GET /get_similar_vectors/<v_id>?num_vectors=...`
-- `GET /get_tags/<v_id>?threshold=...&top_k=...`
+- `POST /get_vector` with body `{"id":"Card Name"}`
+- `POST /get_vector_description` with body `{"id":"Card Name"}`
+- `POST /get_vector_descriptions` with body `{"cards":["Card Name", "..."]}`
+- `POST /get_random_vector`
+- `POST /get_random_vector_description`
+- `POST /get_similar_vectors` with body `{"id":"Card Name","num_vectors":5}`
+- `POST /get_tags` with body `{"id":"Card Name","threshold":0.5,"top_k":8}`
+- `POST /get_tag_list` with body `{"cards":["Card Name", "..."],"threshold":0.5,"top_k":8}`
 - `POST /get_tags_from_vector`
-- `GET /generate_deck/<v_id>`
+- `POST /generate_deck` with body `{"id":"Commander Name"}`
 - `POST /analyze_deck`
 
 Detailed schema: `documentation/vector_db_server_api.json`
