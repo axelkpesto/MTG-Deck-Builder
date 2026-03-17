@@ -1,13 +1,26 @@
 name: JavaScript Format
 
+permissions:
+  contents: read
+
 on:
   push:
     paths:
-      - "frontend/public/app.js"
+      - "**/*.js"
+      - "**/*.cjs"
+      - "**/*.mjs"
+      - "**/*.jsx"
+      - "**/*.ts"
+      - "**/*.tsx"
       - ".github/workflows/javascript-format.yml"
   pull_request:
     paths:
-      - "frontend/public/app.js"
+      - "**/*.js"
+      - "**/*.cjs"
+      - "**/*.mjs"
+      - "**/*.jsx"
+      - "**/*.ts"
+      - "**/*.tsx"
       - ".github/workflows/javascript-format.yml"
 
 jobs:
@@ -22,4 +35,6 @@ jobs:
           node-version: "20"
 
       - name: Check JavaScript formatting
-        run: npx --yes prettier@3.6.2 --check frontend/public/app.js
+        run: |
+          files="$(git ls-files '*.js' '*.cjs' '*.mjs' '*.jsx' '*.ts' '*.tsx')"
+          printf '%s\n' "$files" | xargs -r npx --yes prettier@3.6.2 --check
