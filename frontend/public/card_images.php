@@ -19,7 +19,8 @@ function load_card_image_dataset(): array
     $cfgPath = dirname(__DIR__, 2) . '/backend/config/config.json';
     $cfgRaw = file_get_contents($cfgPath);
     $cfg = json_decode((string)$cfgRaw, true);
-    $datasetPath = dirname(__DIR__, 2) . '/' . ($cfg['datasets']['CARD_IMAGE_DATASET_PATH'] ?? '');
+    $datasetRelPath = $cfg['datasets']['CARD_IMAGE_DATASET_PATH'] ?? '';
+    $datasetPath = dirname(__DIR__, 2) . '/' . $datasetRelPath;
     if ($datasetPath === '' || !is_file($datasetPath)) {
         app_json(['error' => 'Card image dataset not found'], 500);
     }
