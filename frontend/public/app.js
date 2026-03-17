@@ -108,6 +108,30 @@
     return parsed;
   }
 
+  function reportError(context, err) {
+    console.error(context, err);
+  }
+
+  async function callLocalJson(url, payload) {
+    const res = await fetch(url, {
+      method: payload ? "POST" : "GET",
+      headers: payload ? { "Content-Type": "application/json" } : undefined,
+      body: payload ? JSON.stringify(payload) : undefined,
+    });
+
+    const text = await res.text();
+    let parsed;
+    try {
+      parsed = JSON.parse(text);
+    } catch (e) {
+      parsed = { raw: text };
+    }
+
+    if (!res.ok) {
+      throw new Error(`API ${res.status}: ${JSON.stringify(parsed)}`);
+    }
+    return parsed;
+  }
   function parseImportLine(line) {
     const trimmed = line.trim();
     if (!trimmed) return null;
@@ -385,31 +409,55 @@
     return `https://api.scryfall.com/cards/${encodeURIComponent(cardId)}?format=image&version=normal`;
   }
 
-  async function loadCardMeta(name) {
-    if (state.metaCache[name]) {
-      return state.metaCache[name];
+  async function fetchCardImages(names) {
+    if (!Array.isArray(names) || names.length === 0) {
+      return { found: {}, missing: {} };
     }
-    const data = await callApi({
-      path: `/get_vector_description/${encodeURIComponent(name)}`,
-      method: "GET",
-    });
-    const meta = {
-      name: data.card_name || name,
-      cardId: data.card_id || "",
-    };
+    return callLocalJson("/card_images.php", { cards: names });
+  }
+
+  async function loadCardMeta(name) {
+    const cached = state.metaCache[name];
+    if (cached && Array.isArray(cached.imageUrls)) {
+      return cached;
+    }
+
+    let meta = cached;
+    if (!meta) {
+      const data = await callApi({
+        path: "/get_vector_description",
+        method: "POST",
+        body: { id: name },
+      });
+      meta = {
+        name: data.card_name || name,
+        cardId: data.card_id || "",
+        imageUrls: [],
+      };
+    }
+
+    const imageData = await fetchCardImages([meta.name || name]);
+    meta.imageUrls =
+      imageData.found?.[meta.name] ||
+      imageData.found?.[name] ||
+      meta.imageUrls ||
+      [];
+
     state.metaCache[name] = meta;
+    state.metaCache[meta.name] = meta;
     return meta;
   }
 
   async function validateAndTagCard(item) {
     const meta = await callApi({
-      path: `/get_vector_description/${encodeURIComponent(item.name)}`,
-      method: "GET",
+      path: "/get_vector_description",
+      method: "POST",
+      body: { id: item.name },
     });
     const tagData = await callApi({
-      path: `/get_tags/${encodeURIComponent(item.name)}`,
-      method: "GET",
-      query: { threshold: 0.5, top_k: 8 },
+      path: "/get_tags",
+      method: "POST",
+      body: { id: item.name, threshold: 0.5, top_k: 8 },
     });
     const normalized = normalizeTagPayload(
       tagData.predicted,
@@ -431,6 +479,63 @@
     };
   }
 
+  async function enrichCards(items) {
+    if (!Array.isArray(items) || items.length === 0) {
+      return { cards: [], missing: [] };
+    }
+
+    const names = items.map((item) => item.name);
+    const [metaData, tagData, imageData] = await Promise.all([
+      callApi({
+        path: "/get_vector_descriptions",
+        method: "POST",
+        body: { cards: names },
+      }),
+      callApi({
+        path: "/get_tag_list",
+        method: "POST",
+        body: { cards: names, threshold: 0.5, top_k: 8 },
+      }),
+      fetchCardImages(names),
+    ]);
+
+    const cards = [];
+    const missing = [];
+
+    items.forEach((item) => {
+      const meta = metaData.found?.[item.name];
+      const tags = tagData.found?.[item.name];
+      if (!meta || !tags) {
+        missing.push(item.name);
+        return;
+      }
+
+      const resolvedName =
+        typeof meta.card_name === "string" && meta.card_name.trim()
+          ? meta.card_name.trim()
+          : tags.card_id || item.name;
+
+      state.metaCache[resolvedName] = {
+        name: resolvedName,
+        cardId: meta.card_id || "",
+        imageUrls: imageData.found?.[item.name] || [],
+      };
+
+      const normalized = normalizeTagPayload(
+        tags.predicted,
+        tags.predicted_scores || tags.scores,
+      );
+
+      cards.push({
+        name: resolvedName,
+        quantity: item.quantity,
+        tags: normalized.tags,
+        primaryTag: normalized.primaryTag,
+      });
+    });
+
+    return { cards, missing };
+  }
   function showPreview(card, event) {
     els.cardPreview.hidden = false;
     els.cardPreview.dataset.cardName = card.name;
@@ -448,7 +553,7 @@
         )
           return;
         els.cardPreviewName.textContent = meta.name || card.name;
-        const imageUrl = imageUrlFromCardId(meta.cardId);
+        const imageUrl = meta.imageUrls?.[0] || imageUrlFromCardId(meta.cardId);
         if (!imageUrl) {
           els.cardPreviewImage.dataset.state = "missing";
           return;
@@ -574,7 +679,8 @@
       if (requestId !== state.analysisRequestId) return;
       els.analysisMeta.textContent = "Analysis failed.";
       if (settings.showBusy) {
-        setStatus(String(err), "error");
+        reportError("runAnalysis failed", err);
+        setStatus("Analysis failed.", "error");
       }
     } finally {
       if (settings.showBusy) setBusy(false);
@@ -602,8 +708,9 @@
     setBusy(true, "Generating deck...");
     try {
       const data = await callApi({
-        path: `/generate_deck/${encodeURIComponent(commander)}`,
-        method: "GET",
+        path: "/generate_deck",
+        method: "POST",
+        body: { id: commander },
       });
 
       const deckCounts = Array.isArray(data) ? data[0] : data;
@@ -629,10 +736,8 @@
         generatedCards.push({ name, quantity: Math.floor(q) });
       });
 
-      const taggedGenerated = await Promise.all(
-        generatedCards.map(validateAndTagCard),
-      );
-      taggedGenerated.forEach((card) => {
+      const enriched = await enrichCards(generatedCards);
+      enriched.cards.forEach((card) => {
         state.cards.push({
           id: uid(),
           name: card.name,
@@ -642,12 +747,19 @@
         });
       });
 
+      if (enriched.missing.length > 0) {
+        console.warn(
+          "Skipped generated cards missing metadata or tags.",
+          enriched.missing,
+        );
+      }
       renderTagFilter();
       renderRows();
       await runAnalysis({ immediate: true, showBusy: false });
       setStatus("Deck generated and analyzed.", "success");
     } catch (err) {
-      setStatus(String(err), "error");
+      reportError("generateDeck failed", err);
+      setStatus("Deck generation failed.", "error");
     } finally {
       setBusy(false);
     }
@@ -663,9 +775,9 @@
     setBusy(true, "Adding similar cards...");
     try {
       const data = await callApi({
-        path: `/get_similar_vectors/${encodeURIComponent(commander)}`,
-        method: "GET",
-        query: { num_vectors: 30 },
+        path: "/get_similar_vectors",
+        method: "POST",
+        body: { id: commander, num_vectors: 30 },
       });
 
       const existing = new Set(state.cards.map((c) => c.name.toLowerCase()));
@@ -681,9 +793,9 @@
       mergeCards(additions);
       const untagged = state.cards.filter((card) => !card.primaryTag);
       if (untagged.length > 0) {
-        const tagged = await Promise.all(untagged.map(validateAndTagCard));
+        const enriched = await enrichCards(untagged);
         const taggedByName = new Map(
-          tagged.map((card) => [card.name.toLowerCase(), card]),
+          enriched.cards.map((card) => [card.name.toLowerCase(), card]),
         );
         state.cards = state.cards.map((card) => {
           const taggedCard = taggedByName.get(card.name.toLowerCase());
@@ -695,13 +807,20 @@
             primaryTag: taggedCard.primaryTag,
           };
         });
+        if (enriched.missing.length > 0) {
+          console.warn(
+            "Skipped similar cards missing metadata or tags.",
+            enriched.missing,
+          );
+        }
       }
       renderTagFilter();
       renderRows();
       scheduleAnalysis(true);
       setStatus(`Added ${additions.length} similar cards.`, "success");
     } catch (err) {
-      setStatus(String(err), "error");
+      reportError("completeDeck failed", err);
+      setStatus("Adding similar cards failed.", "error");
     } finally {
       setBusy(false);
     }
@@ -810,9 +929,10 @@
       app.hidden = false;
       initAuthenticated(session.user || {});
     } catch (err) {
+      reportError("init failed", err);
       loginShell.hidden = false;
       app.hidden = true;
-      setStatus(String(err), "error");
+      setStatus("Initialization failed.", "error");
     }
   }
 

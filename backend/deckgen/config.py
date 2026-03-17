@@ -35,15 +35,15 @@ class GenConfig:
 
     deck_size: int = 100
     temperature: float = 0.85
-    top_k: int = 512
+    top_k: int = 256
 
     # Candidate pool
-    neighbor_k: int = 600
-    candidate_budget: int = 8000
-    explore_random: int = 2000
+    neighbor_k: int = 400
+    candidate_budget: int = 2000
+    explore_random: int = 512
 
     # Similarity (for learned targets)
-    similar_commander_k: int = 50
+    similar_commander_k: int = 32
     min_samples: int = 25
 
     # Quantiles for learned targets (from SimpleDeckAnalyzer stats)

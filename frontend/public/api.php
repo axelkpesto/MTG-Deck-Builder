@@ -3,6 +3,8 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/../config.php';
 
+ini_set('max_execution_time', '120');
+set_time_limit(120);
 app_start_session();
 $cfg = app_config();
 
@@ -24,11 +26,16 @@ $body = isset($input['body']) && is_array($input['body']) ? $input['body'] : nul
 
 $allowedPrefixes = [
     '/status',
-    '/get_vector/',
-    '/get_vector_description/',
-    '/get_similar_vectors/',
-    '/get_tags/',
-    '/generate_deck/',
+    '/get_vector',
+    '/get_vector_description',
+    '/get_vector_descriptions',
+    '/get_random_vector',
+    '/get_random_vector_description',
+    '/get_similar_vectors',
+    '/get_tags',
+    '/get_tag_list',
+    '/get_tags_from_vector',
+    '/generate_deck',
     '/analyze_deck',
 ];
 
