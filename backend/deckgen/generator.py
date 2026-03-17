@@ -1,5 +1,6 @@
 """Deck generation logic driven by graph embeddings and heuristic constraints."""
 
+from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Tuple
 from collections import defaultdict
 
@@ -96,6 +97,117 @@ def learn_ramp_target(pooled: List[dict], gen: GenConfig) -> int:
     return clamp_int(t, gen.ramp_min, gen.ramp_max)
 
 
+@dataclass
+class CommanderCache:
+    """Commander-specific generation targets and legality masks."""
+
+    land_target: int
+    land_cap: int
+    basic_ratio_target: float
+    basics_target: int
+    curve_target: List[int]
+    ramp_target: int
+    illegal_by_color: torch.Tensor
+    card_colors: torch.Tensor
+    commander_colors: torch.Tensor
+    allowed_basics: List[str]
+    allowed_basic_tensor: torch.Tensor
+    basic_targets_by_land_type: Dict[str, int]
+    common_tag_bounds: Dict[str, Tuple[int, int]]
+
+
+def compute_color_legality(assets: DeckGenAssets, commander_index: int) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    """Compute per-node commander color legality and color masks."""
+    commander_colors = assets.color_identity_mask[commander_index].clone()
+
+    if "C" in CardFields.color_identities():
+        colorless_pos = CardFields.color_identities().index("C")
+        commander_colors[colorless_pos] = False
+        card_colors = assets.color_identity_mask.clone()
+        card_colors[:, colorless_pos] = False
+    else:
+        card_colors = assets.color_identity_mask
+
+    illegal_by_color = (card_colors & ~commander_colors.unsqueeze(0)).any(dim=1)
+
+    allowed_basics = allowed_basic_land_types(commander_colors)
+    allowed_set = {b.lower() for b in allowed_basics}
+    idxs = [i for i, name in enumerate(assets.node_names) if name.strip().lower() in allowed_set]
+    basic_legal_override = torch.zeros((len(assets.node_names),), dtype=torch.bool, device=commander_colors.device)
+    if idxs:
+        basic_legal_override[torch.tensor(idxs, dtype=torch.long, device=commander_colors.device)] = True
+
+    illegal_by_color = illegal_by_color & ~basic_legal_override
+    return illegal_by_color, card_colors, commander_colors
+
+
+def compute_allowed_basic_tensor(node_names: List[str], allowed_basics: List[str], device: torch.device) -> torch.Tensor:
+    """Return node indices corresponding to allowed basic land names."""
+    allowed_set = {b.lower() for b in allowed_basics}
+    idxs = [i for i, name in enumerate(node_names) if name.strip().lower() in allowed_set]
+    return torch.tensor(idxs, dtype=torch.long, device=device) if idxs else torch.empty((0,), dtype=torch.long, device=device)
+
+
+def build_basic_targets_by_type(allowed_basics: List[str], basics_target: int) -> Dict[str, int]:
+    """Distribute desired basic land count across allowed basic types."""
+    types = [b for b in allowed_basics if b]
+    if not types:
+        return {}
+    per = max(1, basics_target // len(types))
+    out = {t: per for t in types}
+    rem = basics_target - per * len(types)
+    i = 0
+    while rem > 0:
+        out[types[i % len(types)]] += 1
+        rem -= 1
+        i += 1
+    return out
+
+
+def build_commander_cache(assets: DeckGenAssets, commander_name: str, commander_index: int, node_embeddings: torch.Tensor, gen: GenConfig) -> CommanderCache:
+    """Compute reusable commander-specific targets and legality masks."""
+    pooled = pool_stats_for_commander(
+        commander_name=commander_name,
+        commander_index=commander_index,
+        assets=assets,
+        node_embeddings=node_embeddings,
+        gen=gen,
+    )
+    land_target, land_cap, basic_ratio_target, basics_target = learn_land_profile(pooled, gen)
+    curve_target = learn_curve_target(pooled)
+    ramp_target = learn_ramp_target(pooled, gen)
+    illegal_by_color, card_colors, commander_colors = compute_color_legality(assets, commander_index)
+    allowed_basics = allowed_basic_land_types(commander_colors)
+    allowed_basic_tensor = compute_allowed_basic_tensor(assets.node_names, allowed_basics, node_embeddings.device)
+    basic_targets_by_land_type = build_basic_targets_by_type(allowed_basics, basics_target)
+
+    common_tag_bounds: Dict[str, Tuple[int, int]] = {}
+    for tp in gen.common_tag_penalties:
+        common_tag_bounds[tp.tag] = learn_tag_bounds(
+            pooled,
+            tp.tag,
+            gen,
+            fallback_min=tp.min_target,
+            fallback_max=tp.max_target,
+        )
+
+    return CommanderCache(
+        land_target=land_target,
+        land_cap=land_cap,
+        basic_ratio_target=basic_ratio_target,
+        basics_target=basics_target,
+        curve_target=curve_target,
+        ramp_target=ramp_target,
+        illegal_by_color=illegal_by_color,
+        card_colors=card_colors,
+        commander_colors=commander_colors,
+        allowed_basics=allowed_basics,
+        allowed_basic_tensor=allowed_basic_tensor,
+        basic_targets_by_land_type=basic_targets_by_land_type,
+        common_tag_bounds=common_tag_bounds,
+    )
+
+
 class DeckState:
     """Mutable generation state tracked while constructing a deck."""
 
@@ -118,7 +230,7 @@ class DeckState:
 class DeckGenerator:
     """Generate a deck list for a commander using model scores and constraints."""
 
-    def __init__(self, model: CommanderDeckGNN, assets: DeckGenAssets, commander_name: str, gen: GenConfig, allow_duplicates: bool, node_embeddings: Optional[torch.Tensor] = None):
+    def __init__(self, model: CommanderDeckGNN, assets: DeckGenAssets, commander_name: str, gen: GenConfig, allow_duplicates: bool, node_embeddings: Optional[torch.Tensor] = None, commander_cache: Optional[CommanderCache] = None):
         """Prepare model state, targets, masks, and helper caches."""
         self.model = model
         self.assets = assets
@@ -135,12 +247,22 @@ class DeckGenerator:
 
         self.node_embeddings = node_embeddings if node_embeddings is not None else model.encode(self.graph.x, self.graph.edge_index, self.graph.edge_attr)
 
-        pooled = pool_stats_for_commander(commander_name=commander_name, commander_index=self.commander_index, assets=assets, node_embeddings=self.node_embeddings, gen=gen)
-        self.land_target, self.land_cap, self.basic_ratio_target, self.basics_target = learn_land_profile(pooled, gen)
-        self.curve_target = learn_curve_target(pooled)
-        self.ramp_target = learn_ramp_target(pooled, gen)
-
-        self.illegal_by_color, self.card_colors, self.commander_colors = self.compute_color_legality()
+        cache = commander_cache or build_commander_cache(
+            assets=self.assets,
+            commander_name=self.commander_name,
+            commander_index=self.commander_index,
+            node_embeddings=self.node_embeddings,
+            gen=self.gen,
+        )
+        self.land_target = cache.land_target
+        self.land_cap = cache.land_cap
+        self.basic_ratio_target = cache.basic_ratio_target
+        self.basics_target = cache.basics_target
+        self.curve_target = cache.curve_target
+        self.ramp_target = cache.ramp_target
+        self.illegal_by_color = cache.illegal_by_color
+        self.card_colors = cache.card_colors
+        self.commander_colors = cache.commander_colors
 
         self.is_basic_node = torch.tensor(
             [is_basic_land_name(n) for n in self.assets.node_names],
@@ -155,9 +277,9 @@ class DeckGenerator:
         self.is_utility_land = self.assets.is_land_node & ~self.is_basic_node & ~self.is_fixing_land
 
         # Allowed basics + per-type targets
-        self.allowed_basics = allowed_basic_land_types(self.commander_colors)
-        self.allowed_basic_tensor = self.compute_allowed_basic_tensor(self.allowed_basics)
-        self.basic_targets_by_land_type = self.build_basic_targets_by_type(self.allowed_basics, self.basics_target)
+        self.allowed_basics = cache.allowed_basics
+        self.allowed_basic_tensor = cache.allowed_basic_tensor
+        self.basic_targets_by_land_type = cache.basic_targets_by_land_type
 
         basic_types = sorted({basic_land_type(name) for name in CardFields.basic_lands()})
         self.basic_type_to_idx = {t: i for i, t in enumerate(basic_types)}
@@ -178,9 +300,7 @@ class DeckGenerator:
         for tp in self.gen.common_tag_penalties:
             self.common_tag_masks[tp.tag] = self.build_tag_mask(tp.tag)
 
-        self.common_tag_bounds: Dict[str, Tuple[int, int]] = {}
-        for tp in self.gen.common_tag_penalties:
-            self.common_tag_bounds[tp.tag] = learn_tag_bounds(pooled, tp.tag, gen, fallback_min=tp.min_target, fallback_max=tp.max_target)
+        self.common_tag_bounds = cache.common_tag_bounds
 
         self.non_strategy = set(self.gen.non_strategy_tags)
         tag_to_nodes: Dict[str, List[int]] = defaultdict(list)
@@ -205,48 +325,15 @@ class DeckGenerator:
 
     def compute_color_legality(self) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         """Compute per-node commander color legality and color masks."""
-        commander_colors = self.assets.color_identity_mask[self.commander_index].clone()
-
-        if "C" in CardFields.color_identities():
-            colorless_pos = CardFields.color_identities().index("C")
-            commander_colors[colorless_pos] = False
-            card_colors = self.assets.color_identity_mask.clone()
-            card_colors[:, colorless_pos] = False
-        else:
-            card_colors = self.assets.color_identity_mask
-
-        illegal_by_color = (card_colors & ~commander_colors.unsqueeze(0)).any(dim=1)
-
-        allowed_basics = allowed_basic_land_types(commander_colors)
-        allowed_basic_tensor = self.compute_allowed_basic_tensor(allowed_basics)
-
-        basic_legal_override = torch.zeros((self.num_nodes,), dtype=torch.bool, device=self.device)
-        if allowed_basic_tensor.numel() > 0:
-            basic_legal_override[allowed_basic_tensor] = True
-
-        illegal_by_color = illegal_by_color & ~basic_legal_override
-        return illegal_by_color, card_colors, commander_colors
+        return compute_color_legality(self.assets, self.commander_index)
 
     def compute_allowed_basic_tensor(self, allowed_basics: List[str]) -> torch.Tensor:
         """Return node indices corresponding to allowed basic land names."""
-        allowed_set = {b.lower() for b in allowed_basics}
-        idxs = [i for i, name in enumerate(self.assets.node_names) if name.strip().lower() in allowed_set]
-        return torch.tensor(idxs, dtype=torch.long, device=self.device) if idxs else torch.empty((0,), dtype=torch.long, device=self.device)
+        return compute_allowed_basic_tensor(self.assets.node_names, allowed_basics, self.device)
 
     def build_basic_targets_by_type(self, allowed_basics: List[str], basics_target: int) -> Dict[str, int]:
         """Distribute desired basic land count across allowed basic types."""
-        types = [b for b in allowed_basics if b]
-        if not types:
-            return {}
-        per = max(1, basics_target // len(types))
-        out = {t: per for t in types}
-        rem = basics_target - per * len(types)
-        i = 0
-        while rem > 0:
-            out[types[i % len(types)]] += 1
-            rem -= 1
-            i += 1
-        return out
+        return build_basic_targets_by_type(allowed_basics, basics_target)
 
     def candidate_pool(self, last_picked: int) -> torch.Tensor:
         """Build the candidate node pool from neighbors and random exploration."""
@@ -469,9 +556,17 @@ class DeckGenerator:
         return state.deck_indices
 
 
-def generate_deck(model: CommanderDeckGNN, assets: DeckGenAssets, commander_name: str, gen: GenConfig, allow_duplicates: bool = False, node_embeddings: Optional[torch.Tensor] = None) -> Tuple[Dict[str, int], Dict[str, Any]]:
+def generate_deck(model: CommanderDeckGNN, assets: DeckGenAssets, commander_name: str, gen: GenConfig, allow_duplicates: bool = False, node_embeddings: Optional[torch.Tensor] = None, commander_cache: Optional[CommanderCache] = None) -> Tuple[Dict[str, int], Dict[str, Any]]:
     """Generate a deck and return name counts plus summary stats."""
-    g = DeckGenerator(model=model, assets=assets, commander_name=commander_name, gen=gen, allow_duplicates=allow_duplicates, node_embeddings=node_embeddings)
+    g = DeckGenerator(
+        model=model,
+        assets=assets,
+        commander_name=commander_name,
+        gen=gen,
+        allow_duplicates=allow_duplicates,
+        node_embeddings=node_embeddings,
+        commander_cache=commander_cache,
+    )
 
     deck_indices = g.run()
 

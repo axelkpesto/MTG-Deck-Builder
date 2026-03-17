@@ -1,11 +1,13 @@
 """Load Configuration from JSON to usable dictionaries"""
 
 import json
+from pathlib import Path
 from typing import Dict
 
 def load_config() -> Dict[str, Dict[str, str]]:
     """Load Config from JSON"""
-    with open("config/config.json", "r", encoding="utf-8") as f:
+    config_path = Path(__file__).with_name("config.json")
+    with open(config_path, "r", encoding="utf-8") as f:
         raw = json.load(f)
     return raw
 

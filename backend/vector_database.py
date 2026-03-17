@@ -137,7 +137,11 @@ class VectorStore:
 
     def get(self, v_id: str, default: Any) -> torch.Tensor:
         """Get vector by id or return `default` if missing."""
-        return self.vector_data[v_id] if v_id in self.vector_data else default
+        if v_id in self.vector_data:
+            return self.vector_data[v_id]
+        if default is not None:
+            return default
+        raise KeyError(f"KeyError: {v_id}")
 
     def get_list(self, v_ids: List[str], default: Any) -> List[torch.Tensor]:
         """Get vectors for a list of ids with fallback default."""

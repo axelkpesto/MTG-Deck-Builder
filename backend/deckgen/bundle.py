@@ -9,7 +9,7 @@ import torch
 from vector_database import VectorDatabase
 from deckgen.assets import DeckGenAssets, load_assets
 from deckgen.config import DeckGenPaths, GenConfig
-from deckgen.generator import generate_deck
+from deckgen.generator import CommanderCache, build_commander_cache, generate_deck
 from deckgen.model import CommanderDeckGNN
 
 class DeckGenBundle:
@@ -21,6 +21,7 @@ class DeckGenBundle:
         self.gen = gen
         self.device = device
         self.node_embeddings = node_embeddings
+        self.commander_cache: Dict[str, CommanderCache] = {}
 
     @classmethod
     def load(cls, paths: Optional[DeckGenPaths] = None, gen: Optional[GenConfig] = None, device: str = "cpu", vector_db: Optional[VectorDatabase] = None) -> "DeckGenBundle":
@@ -56,10 +57,24 @@ class DeckGenBundle:
             self.node_embeddings = self.model.encode(self.assets.graph.x, self.assets.graph.edge_index, self.assets.graph.edge_attr)
         return self.node_embeddings
 
+    def get_commander_cache(self, commander_name: str) -> CommanderCache:
+        """Compute and cache commander-specific generation metadata."""
+        cache = self.commander_cache.get(commander_name)
+        if cache is None:
+            cache = build_commander_cache(
+                assets=self.assets,
+                commander_name=commander_name,
+                commander_index=int(self.assets.node_to_index[commander_name]),
+                node_embeddings=self.get_node_embeddings(),
+                gen=self.gen,
+            )
+            self.commander_cache[commander_name] = cache
+        return cache
 
     def generate(self, commander_name: str, allow_duplicates: bool = False) -> Tuple[Dict[str, int], Dict[str, object]]:
         """Generate a deck list and diagnostics for a given commander name."""
         node_embeddings = self.get_node_embeddings()
+        commander_cache = self.get_commander_cache(commander_name)
 
         return generate_deck(
             model=self.model,
@@ -68,4 +83,5 @@ class DeckGenBundle:
             gen=self.gen,
             allow_duplicates=allow_duplicates,
             node_embeddings=node_embeddings,
+            commander_cache=commander_cache,
         )

@@ -1,0 +1,40 @@
+name: JavaScript Format
+
+permissions:
+  contents: read
+
+on:
+  push:
+    paths:
+      - "**/*.js"
+      - "**/*.cjs"
+      - "**/*.mjs"
+      - "**/*.jsx"
+      - "**/*.ts"
+      - "**/*.tsx"
+      - ".github/workflows/javascript-format.yml"
+  pull_request:
+    paths:
+      - "**/*.js"
+      - "**/*.cjs"
+      - "**/*.mjs"
+      - "**/*.jsx"
+      - "**/*.ts"
+      - "**/*.tsx"
+      - ".github/workflows/javascript-format.yml"
+
+jobs:
+  prettier:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Check JavaScript formatting
+        run: |
+          files="$(git ls-files '*.js' '*.cjs' '*.mjs' '*.jsx' '*.ts' '*.tsx')"
+          printf '%s\n' "$files" | xargs -r npx --yes prettier@3.6.2 --check
