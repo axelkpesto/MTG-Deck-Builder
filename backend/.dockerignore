@@ -21,9 +21,10 @@ venv/
 README.md
 
 #Ignored Files
-datasets/AllPrintings.json
-datasets/parsed_cards.json
-datasets/variants.json
+AllPrintings.json
+parsed_cards.json
+variants.json
+AtomicCards.json
 
 #Unimportant Files
 LICENSE
@@ -39,4 +40,4 @@ test.py
 dataset_builders/
 documentation/
 tests/
-text/
+workers/

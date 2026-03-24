@@ -9,11 +9,11 @@ import torch
 import torch.nn.functional as F
 from torch_geometric.data import Data
 
-from vector_database import VectorDatabase
-from card_data import CardDecoder, SimpleDeck, CardFields
-from deckgen.config import DeckGenPaths, DeckTrainConfig
-from deckgen.model import CommanderDeckGNN
-from deckgen.utils import mana_value_bucket, set_seed
+from backend.card_data import CardDecoder, CardFields, SimpleDeck
+from backend.deckgen.config import DeckGenPaths, DeckTrainConfig
+from backend.deckgen.model import CommanderDeckGNN
+from backend.deckgen.utils import mana_value_bucket, set_seed
+from backend.vector_database import VectorDatabase
 
 card_decoder = CardDecoder()
 

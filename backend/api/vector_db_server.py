@@ -1,7 +1,4 @@
 """Flask server exposing vector, tagging, and deck-generation endpoints."""
-
-
-#Make all requests as post requests
 import json
 import logging
 import os
@@ -19,12 +16,12 @@ from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 from google.api_core.exceptions import GoogleAPICallError, RetryError
 
-from vector_database import VectorDatabase
-from tagging_model import load_model
-from firestore.firestore_connector import authenticate_api_key, touch_last_used
-from deckgen import DeckGenBundle, DeckGenPaths
-from card_data import SimpleDeck, SimpleDeckAnalyzer, CardDecoder
-from config import CONFIG
+from backend.card_data import CardDecoder, SimpleDeck, SimpleDeckAnalyzer
+from backend.config import CONFIG
+from backend.deckgen import DeckGenBundle, DeckGenPaths
+from backend.firestore.firestore_connector import authenticate_api_key, touch_last_used
+from backend.ml.tagging_model import load_model, predicted_scores_from_probabilities
+from backend.vector_database import VectorDatabase
 
 app = Flask(__name__)
 load_dotenv()
@@ -77,7 +74,7 @@ limiter = Limiter(
     app=app,
     key_func=lambda: str(getattr(g, "api_key_id", get_remote_address())),
     default_limits=[DEFAULT_RATE_LIMIT],
-    storage_uri=os.environ.get("REDIS_URL", ""),
+    storage_uri=os.environ["REDIS_URL"],
 )
 
 auth_enabled = bool(int(os.environ.get("AUTHENTICATE", 1)))
@@ -163,7 +160,7 @@ def _authenticate_api_key():
     """Authenticate API key for protected endpoints."""
     if not auth_enabled:
         return None
-    
+
     if request.path in ["/", "/help", "/examples", "/status"]:
         return None
 
@@ -173,7 +170,7 @@ def _authenticate_api_key():
 
     if api_key == g.get("last_raw"):
         return None
-    
+
     info = authenticate_api_key(api_key)
     if not info:
         return error("invalid or expired API key", 403)
@@ -644,16 +641,11 @@ def predict_from_vector(vec_np: np.ndarray, threshold: float, top_k: int = 8):
     top_idx = np.argsort(probs)[-tk:][::-1]
     scores = [{"tag": class_names[i], "score": float(probs[i])} for i in top_idx]
 
-    pred_idxs = np.where(probs >= threshold)[0]
-    predicted_scores = sorted(
-        (
-            {"tag": class_names[i], "score": float(probs[i])}
-            for i in pred_idxs.tolist()
-        ),
-        key=lambda item: item["score"],
-        reverse=True,
+    _, predicted = predicted_scores_from_probabilities(
+        probs=probs,
+        class_names=class_names,
+        threshold=threshold,
     )
-    predicted = [item["tag"] for item in predicted_scores]
 
     if not predicted:
         predicted = [s["tag"] for s in scores]
@@ -664,8 +656,13 @@ def predict_from_vector(vec_np: np.ndarray, threshold: float, top_k: int = 8):
         "threshold": float(threshold)
     }
 
-if __name__ == '__main__':
+def main() -> None:
+    """Run the Flask API server."""
     app.run(host='0.0.0.0', port=int(os.environ.get('DEFAULT_PORT', 8080)))
+
+
+if __name__ == '__main__':
+    main()
     load_dotenv()
     API_KEY = os.environ.get("FIREBASE_API_KEY", "")
     URL = "http://127.0.0.1:5000/get_random_vector"

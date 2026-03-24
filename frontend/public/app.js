@@ -132,6 +132,7 @@
     }
     return parsed;
   }
+
   function parseImportLine(line) {
     const trimmed = line.trim();
     if (!trimmed) return null;
@@ -193,6 +194,31 @@
         });
       }
     }
+  }
+
+  function ensureCommanderCardListed() {
+    const commander = els.commander.value.trim();
+    if (!commander) return;
+
+    state.commander = commander;
+    const existing = state.cards.find(
+      (card) => card.name.toLowerCase() === commander.toLowerCase(),
+    );
+
+    if (existing) {
+      existing.quantity = 1;
+      existing.tags = ["Commander"];
+      existing.primaryTag = "Commander";
+      return;
+    }
+
+    state.cards.unshift({
+      id: uid(),
+      name: commander,
+      quantity: 1,
+      tags: ["Commander"],
+      primaryTag: "Commander",
+    });
   }
 
   function buildAnalysisCards() {
@@ -850,6 +876,7 @@
 
       if (validCards.length > 0) {
         mergeCards(validCards);
+        ensureCommanderCardListed();
         state.cards = state.cards.map((card) => {
           const validCard = validCards.find(
             (item) => item.name.toLowerCase() === card.name.toLowerCase(),
@@ -865,7 +892,7 @@
         els.importCards.value = "";
         renderTagFilter();
         renderRows();
-        scheduleAnalysis();
+        await runAnalysis({ immediate: true, showBusy: false });
       }
 
       if (invalidNames.length > 0) {

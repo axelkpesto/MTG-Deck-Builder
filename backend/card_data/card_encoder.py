@@ -5,8 +5,8 @@ from typing import Optional, Tuple
 import numpy as np
 from sentence_transformers import SentenceTransformer
 
-from card_data.card import Card
-from card_data.card_fields import CardFields
+from backend.card_data.card import Card
+from backend.card_data.card_fields import CardFields
 
 class CardEncoder:
     """Encode `Card` objects into fixed numeric feature vectors."""

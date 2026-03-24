@@ -8,8 +8,8 @@ import numpy as np
 import pandas as pd
 import torch
 
-from card_data import CardFields, CardEncoder, CardDecoder
-from config import CONFIG
+from backend.card_data import CardDecoder, CardEncoder, CardFields
+from backend.config import CONFIG
 
 class VectorStore:
     """In-memory vector store with similarity search and serialization helpers."""

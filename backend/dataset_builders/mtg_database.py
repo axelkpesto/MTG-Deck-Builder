@@ -7,7 +7,7 @@ from typing import List, Dict, Any
 import pandas as pd
 from dotenv import load_dotenv
 
-from card_data import CardFields
+from backend.card_data import CardFields
 
 load_dotenv()
 
