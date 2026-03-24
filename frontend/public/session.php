@@ -5,6 +5,7 @@ require_once __DIR__ . '/../config.php';
 
 app_start_session();
 $user = $_SESSION['user'] ?? null;
+session_write_close();
 
 $payload = ['authenticated' => is_array($user), 'user' => $user];
 if (isset($_GET['debug']) && $_GET['debug'] === '1') {
