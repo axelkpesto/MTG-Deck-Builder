@@ -5,19 +5,9 @@ require_once __DIR__ . '/../config.php';
 
 ini_set('max_execution_time', '120');
 set_time_limit(120);
-app_start_session();
 $cfg = app_config();
-
-if (!isset($_SESSION['user'])) {
-    app_json(['error' => 'Unauthorized'], 401);
-}
-
-$raw = file_get_contents('php://input');
-$input = json_decode((string)$raw, true);
-
-if (!is_array($input)) {
-    app_json(['error' => 'Invalid JSON body'], 400);
-}
+app_require_user();
+$input = app_json_input();
 
 $path = (string)($input['path'] ?? '');
 $method = strtoupper((string)($input['method'] ?? 'GET'));

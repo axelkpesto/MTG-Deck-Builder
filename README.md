@@ -16,25 +16,30 @@ This project combines multiple ML systems into one pipeline:
 It is designed as both a research sandbox and an API backend you can deploy.
 
 ## Core components
-- `vector_database.py`: vector storage, lookup, similarity search, persistence
-- `tagging_model.py`: trains/loads a multi-label tag predictor
-- `deckgen/`: GNN model + generation logic (`DeckGenBundle` entrypoint)
-- `vector_db_server.py`: Flask API exposing vectors, tags, generation, and deck analysis
-- `card_data/`: card/deck data models and analyzers
-- `documentation/vector_db_server_api.json`: API spec
+- `backend/vector_database.py`: vector storage, lookup, similarity search, persistence
+- `backend/tagging_model.py`: trains/loads a multi-label tag predictor
+- `backend/deckgen/`: GNN model + generation logic (`DeckGenBundle` entrypoint)
+- `backend/api/vector_db_server.py`: canonical Flask API module
+- `backend/workers/deckgen_worker.py`: Redis-backed background worker for deck jobs
+- `backend/card_data/`: card/deck data models and analyzers
+- `backend/documentation/vector_db_server_api.json`: API spec
 
 ## Project structure
 ```text
 MTG-Deck-Builder/
-  card_data/              # Card/deck domain models + analyzers
-  deckgen/                # Commander generation model + runtime
-  datasets/               # Vector DB + graph + training datasets
-  documentation/          # API schema docs
-  firestore/              # API key auth integration
-  models/                 # Saved ML checkpoints
-  vector_db_server.py     # Flask API app
-  vector_database.py      # Vector DB implementation
-  tagging_model.py        # Tagging model training/inference
+  backend/
+    api/                  # Flask API modules
+    workers/              # Background job consumers
+    card_data/            # Card/deck domain models + analyzers
+    deckgen/              # Commander generation model + runtime
+    data/
+      raw/                # Source datasets
+      processed/          # Generated runtime datasets
+      models/             # Saved ML checkpoints
+    documentation/        # API schema docs
+    firestore/            # API key auth integration
+    vector_database.py    # Vector DB implementation
+    tagging_model.py      # Tagging model training/inference
 ```
 
 ## Quickstart (local)
@@ -56,8 +61,8 @@ pip install -r requirements.txt
 ```
 
 ### 3. Configure paths
-Dataset/model paths are configured in `config/config.json`.
-Default paths expect local files in `datasets/` and `models/`.
+Dataset/model paths are configured in `backend/config/config.json`.
+Default paths expect local files in `backend/data/`.
 
 ### 4. Run a local generation test
 ```bash
@@ -81,7 +86,7 @@ deck_counts, stats = bundle.generate(commander_name="Atraxa, Praetors' Voice")
 ## API server
 Run locally:
 ```bash
-python vector_db_server.py
+python backend/vector_db_server.py
 ```
 Server defaults:
 - Host: `0.0.0.0`
@@ -111,7 +116,7 @@ Authenticated routes (API key required):
 - `POST /generate_deck` with body `{"id":"Commander Name"}`
 - `POST /analyze_deck`
 
-Detailed schema: `documentation/vector_db_server_api.json`
+Detailed schema: `backend/documentation/vector_db_server_api.json`
 
 ## Environment variables
 Common runtime variables:
