@@ -1,7 +1,4 @@
 """Build a lightweight card-name -> image URL dataset for frontend previews."""
-
-from __future__ import annotations
-
 import json
 import sys
 from collections import defaultdict

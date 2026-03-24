@@ -11,7 +11,7 @@ BACKEND_DIR = Path(__file__).resolve().parents[1]
 if str(BACKEND_DIR) not in sys.path:
     sys.path.insert(0, str(BACKEND_DIR))
 
-from tagging_model import load_model
+from ml.tagging_model import load_model
 from vector_database import VectorDatabase
 from config import CONFIG
 

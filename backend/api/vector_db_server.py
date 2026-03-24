@@ -23,7 +23,7 @@ from flask_limiter.util import get_remote_address
 from google.api_core.exceptions import GoogleAPICallError, RetryError
 
 from vector_database import VectorDatabase
-from tagging_model import load_model
+from ml.tagging_model import load_model
 from firestore.firestore_connector import authenticate_api_key, touch_last_used
 from deckgen import DeckGenBundle, DeckGenPaths
 from card_data import SimpleDeck, SimpleDeckAnalyzer, CardDecoder
