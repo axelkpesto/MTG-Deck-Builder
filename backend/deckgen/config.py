@@ -2,7 +2,7 @@
 
 from dataclasses import dataclass, field
 from typing import Tuple
-from config import CONFIG
+from backend.config import CONFIG
 
 
 @dataclass(frozen=True)

@@ -5,7 +5,7 @@ from typing import Dict, List
 import numpy as np
 import torch
 import torch.nn.functional as F
-from card_data.card_fields import CardFields
+from backend.card_data.card_fields import CardFields
 
 class CardDecoder:
     """Decode vectorized cards into readable fields and constrained tensors."""

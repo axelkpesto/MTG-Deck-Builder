@@ -8,12 +8,11 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 
-from card_data import CardFields
-
-from deckgen.assets import DeckGenAssets
-from deckgen.config import GenConfig
-from deckgen.model import CommanderDeckGNN
-from deckgen.utils import clamp_int, mana_value_bucket, basic_land_type, is_basic_land_name, allowed_basic_land_types, duplicate_penalty, extract_basic_ratio, extract_curve_counts, extract_land_count, extract_tag_count
+from backend.card_data import CardFields
+from backend.deckgen.assets import DeckGenAssets
+from backend.deckgen.config import GenConfig
+from backend.deckgen.model import CommanderDeckGNN
+from backend.deckgen.utils import clamp_int, mana_value_bucket, basic_land_type, is_basic_land_name, allowed_basic_land_types, duplicate_penalty, extract_basic_ratio, extract_curve_counts, extract_land_count, extract_tag_count
 
 def pool_stats_for_commander(commander_name: str, commander_index: int, assets: DeckGenAssets, node_embeddings: torch.Tensor, gen: GenConfig) -> List[dict]:
     """Collect training stats for commander-specific and similar commanders."""

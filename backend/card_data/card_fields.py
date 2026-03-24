@@ -5,7 +5,7 @@ from typing import Dict, Callable
 
 import numpy as np
 
-from card_data.card import Card
+from backend.card_data.card import Card
 
 class CardFields:
     """Static tables and helper methods for card parsing and tagging."""

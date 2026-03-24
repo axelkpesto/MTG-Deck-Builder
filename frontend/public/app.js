@@ -133,46 +133,6 @@
     return parsed;
   }
 
-  function sleep(ms) {
-    return new Promise((resolve) => window.setTimeout(resolve, ms));
-  }
-
-  async function createDeckJob(commander) {
-    return callLocalJson("/generate_deck_job.php", { commander });
-  }
-
-  async function getDeckJobStatus(jobId) {
-    return callLocalJson(
-      `/generate_deck_job_status.php?id=${encodeURIComponent(jobId)}`,
-    );
-  }
-
-  async function getDeckJobResult(jobId) {
-    return callLocalJson(
-      `/generate_deck_job_result.php?id=${encodeURIComponent(jobId)}`,
-    );
-  }
-
-  async function waitForDeckJob(jobId) {
-    while (true) {
-      const status = await getDeckJobStatus(jobId);
-      if (status.status === "done") {
-        return getDeckJobResult(jobId);
-      }
-      if (status.status === "failed") {
-        throw new Error(status.error || "Deck generation failed.");
-      }
-
-      setStatus(
-        status.status === "running"
-          ? "Generating deck..."
-          : "Deck generation queued...",
-        "busy",
-      );
-      await sleep(1500);
-    }
-  }
-
   function parseImportLine(line) {
     const trimmed = line.trim();
     if (!trimmed) return null;
@@ -234,6 +194,31 @@
         });
       }
     }
+  }
+
+  function ensureCommanderCardListed() {
+    const commander = els.commander.value.trim();
+    if (!commander) return;
+
+    state.commander = commander;
+    const existing = state.cards.find(
+      (card) => card.name.toLowerCase() === commander.toLowerCase(),
+    );
+
+    if (existing) {
+      existing.quantity = 1;
+      existing.tags = ["Commander"];
+      existing.primaryTag = "Commander";
+      return;
+    }
+
+    state.cards.unshift({
+      id: uid(),
+      name: commander,
+      quantity: 1,
+      tags: ["Commander"],
+      primaryTag: "Commander",
+    });
   }
 
   function buildAnalysisCards() {
@@ -748,9 +733,11 @@
     state.commander = commander;
     setBusy(true, "Generating deck...");
     try {
-      const job = await createDeckJob(commander);
-      const jobResult = await waitForDeckJob(job.job_id);
-      const data = jobResult.result;
+      const data = await callApi({
+        path: "/generate_deck",
+        method: "POST",
+        body: { id: commander },
+      });
 
       const deckCounts = Array.isArray(data) ? data[0] : data;
       if (!deckCounts || typeof deckCounts !== "object") {
@@ -889,6 +876,7 @@
 
       if (validCards.length > 0) {
         mergeCards(validCards);
+        ensureCommanderCardListed();
         state.cards = state.cards.map((card) => {
           const validCard = validCards.find(
             (item) => item.name.toLowerCase() === card.name.toLowerCase(),
@@ -904,7 +892,7 @@
         els.importCards.value = "";
         renderTagFilter();
         renderRows();
-        scheduleAnalysis();
+        await runAnalysis({ immediate: true, showBusy: false });
       }
 
       if (invalidNames.length > 0) {

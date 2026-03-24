@@ -53,3 +53,30 @@ function app_json(array $payload, int $status = 200): void
     echo json_encode($payload);
     exit;
 }
+
+function app_json_input(): array
+{
+    $raw = file_get_contents('php://input');
+    if ($raw === false || $raw === '') {
+        return [];
+    }
+
+    $decoded = json_decode((string)$raw, true);
+    if (!is_array($decoded)) {
+        app_json(['error' => 'Invalid JSON body'], 400);
+    }
+
+    return $decoded;
+}
+
+function app_require_user(): array
+{
+    app_start_session();
+    if (!isset($_SESSION['user']) || !is_array($_SESSION['user'])) {
+        app_json(['error' => 'Unauthorized'], 401);
+    }
+
+    $user = $_SESSION['user'];
+    session_write_close();
+    return $user;
+}

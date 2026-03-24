@@ -1,16 +1,10 @@
 """Flask server exposing vector, tagging, and deck-generation endpoints."""
-from pathlib import Path
-import sys
 import json
 import logging
 import os
 import threading
 import time
 from typing import Any
-
-BACKEND_ROOT = Path(__file__).resolve().parents[1]
-if str(BACKEND_ROOT) not in sys.path:
-    sys.path.insert(0, str(BACKEND_ROOT))
 
 import numpy as np
 import requests
@@ -22,12 +16,12 @@ from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 from google.api_core.exceptions import GoogleAPICallError, RetryError
 
-from vector_database import VectorDatabase
-from ml.tagging_model import load_model
-from firestore.firestore_connector import authenticate_api_key, touch_last_used
-from deckgen import DeckGenBundle, DeckGenPaths
-from card_data import SimpleDeck, SimpleDeckAnalyzer, CardDecoder
-from config import CONFIG
+from backend.card_data import CardDecoder, SimpleDeck, SimpleDeckAnalyzer
+from backend.config import CONFIG
+from backend.deckgen import DeckGenBundle, DeckGenPaths
+from backend.firestore.firestore_connector import authenticate_api_key, touch_last_used
+from backend.ml.tagging_model import load_model, predicted_scores_from_probabilities
+from backend.vector_database import VectorDatabase
 
 app = Flask(__name__)
 load_dotenv()
@@ -166,7 +160,7 @@ def _authenticate_api_key():
     """Authenticate API key for protected endpoints."""
     if not auth_enabled:
         return None
-    
+
     if request.path in ["/", "/help", "/examples", "/status"]:
         return None
 
@@ -176,7 +170,7 @@ def _authenticate_api_key():
 
     if api_key == g.get("last_raw"):
         return None
-    
+
     info = authenticate_api_key(api_key)
     if not info:
         return error("invalid or expired API key", 403)
@@ -647,16 +641,11 @@ def predict_from_vector(vec_np: np.ndarray, threshold: float, top_k: int = 8):
     top_idx = np.argsort(probs)[-tk:][::-1]
     scores = [{"tag": class_names[i], "score": float(probs[i])} for i in top_idx]
 
-    pred_idxs = np.where(probs >= threshold)[0]
-    predicted_scores = sorted(
-        (
-            {"tag": class_names[i], "score": float(probs[i])}
-            for i in pred_idxs.tolist()
-        ),
-        key=lambda item: item["score"],
-        reverse=True,
+    _, predicted = predicted_scores_from_probabilities(
+        probs=probs,
+        class_names=class_names,
+        threshold=threshold,
     )
-    predicted = [item["tag"] for item in predicted_scores]
 
     if not predicted:
         predicted = [s["tag"] for s in scores]

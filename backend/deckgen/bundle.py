@@ -3,11 +3,11 @@ from typing import Dict, Optional, Tuple
 
 import torch
 
-from vector_database import VectorDatabase
-from deckgen.assets import DeckGenAssets, load_assets
-from deckgen.config import DeckGenPaths, GenConfig
-from deckgen.generator import CommanderCache, build_commander_cache, generate_deck
-from deckgen.model import CommanderDeckGNN
+from backend.deckgen.assets import DeckGenAssets, load_assets
+from backend.deckgen.config import DeckGenPaths, GenConfig
+from backend.deckgen.generator import CommanderCache, build_commander_cache, generate_deck
+from backend.deckgen.model import CommanderDeckGNN
+from backend.vector_database import VectorDatabase
 
 class DeckGenBundle:
     """Runtime bundle containing model, assets, and generation config."""

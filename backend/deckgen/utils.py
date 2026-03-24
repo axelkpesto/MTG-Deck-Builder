@@ -6,7 +6,7 @@ from typing import Any, List
 import random
 import numpy as np
 import torch
-from card_data import CardFields
+from backend.card_data import CardFields
 
 def mana_value_bucket(mv: float) -> int:
     """Bucket mana value into range 0..6, where 6 means 6+."""

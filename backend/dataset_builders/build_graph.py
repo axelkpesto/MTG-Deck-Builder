@@ -12,14 +12,9 @@ from typing import Dict, List, Tuple, Any
 
 import torch
 
-from vector_database import VectorDatabase
-from card_data import CardFields
-
-from config import CONFIG
-
-BACKEND_DIR = Path(__file__).resolve().parents[1]
-if str(BACKEND_DIR) not in sys.path:
-    sys.path.insert(0, str(BACKEND_DIR))
+from backend.card_data import CardFields
+from backend.config import CONFIG
+from backend.vector_database import VectorDatabase
 
 @dataclass(frozen=True)
 class Config:
@@ -204,7 +199,7 @@ def tag_graph(tag_data: Dict[str, Dict], min_common: int = 2, max_cards_per_tag:
     return graph
 
 
-def synergy_tag_graph(tag_data: Dict[str, Dict], min_common: int = 1, max_cards_per_tag: int = 3000) -> Dict[str, Dict[str, int]]:  # pylint: disable=too-many-branches
+def synergy_tag_graph(tag_data: Dict[str, Dict], min_common: int = 1, max_cards_per_tag: int = 3000) -> Dict[str, Dict[str, int]]:
     """Build directed edges from tags to cards that match synergistic tags."""
 
     tag_to_cards = defaultdict(list)
@@ -317,12 +312,12 @@ def main():
 
     commander_cards = load_commander_cards(cfg.commander_cards_path)
 
-    print("[info] Data loaded.")
+    print("Data loaded.")
 
     vector_data = VectorDatabase.load_static(cfg.vector_path)
     node_names = list(vector_data.keys())
     node_to_idx = {n: i for i, n in enumerate(node_names)}
-    print(f"[info] Vector data loaded. Nodes: {len(node_names)}")
+    print(f"Vector data loaded. Nodes: {len(node_names)}")
 
     ranks: List[int] = []
     cmc: List[int] = []

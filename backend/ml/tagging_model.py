@@ -21,9 +21,9 @@ from sklearn.metrics import (
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import MultiLabelBinarizer
 
-from vector_database import VectorDatabase
-from card_data import CardEncoder, CardDecoder
-from config import CONFIG
+from backend.card_data import CardDecoder, CardEncoder
+from backend.config import CONFIG
+from backend.vector_database import VectorDatabase
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -122,14 +122,7 @@ class MLP(nn.Module):
         return self.net(x)
 
 
-def _run_train_epoch(
-    model: nn.Module,
-    train_loader: DataLoader,
-    criterion: nn.Module,
-    optimizer: torch.optim.Optimizer,
-    use_cuda_amp: bool,
-    scaler: torch.amp.GradScaler | None,
-) -> float:
+def _run_train_epoch(model: nn.Module, train_loader: DataLoader, criterion: nn.Module, optimizer: torch.optim.Optimizer, use_cuda_amp: bool, scaler: torch.amp.GradScaler | None) -> float:
     """Run one training epoch and return mean training loss."""
     model.train()
     running = 0.0
@@ -153,12 +146,7 @@ def _run_train_epoch(
     return running / len(train_loader.dataset)
 
 
-def _run_val_epoch(
-    model: nn.Module,
-    val_loader: DataLoader,
-    criterion: nn.Module,
-    use_cuda_amp: bool,
-) -> float:
+def _run_val_epoch(model: nn.Module, val_loader: DataLoader, criterion: nn.Module, use_cuda_amp: bool) -> float:
     """Run one validation epoch and return mean validation loss."""
     model.eval()
     running = 0.0
@@ -171,12 +159,7 @@ def _run_val_epoch(
             running += loss.item() * xb.size(0)
     return running / len(val_loader.dataset)
 
-def train(
-    model: nn.Module,
-    train_loader: DataLoader,
-    val_loader: DataLoader,
-    train_cfg: TrainConfig = TrainConfig(),
-):
+def train(model: nn.Module, train_loader: DataLoader, val_loader: DataLoader, train_cfg: TrainConfig = TrainConfig()):
     """Train the model and print epoch-level losses."""
     model.to(device)
     criterion = nn.BCEWithLogitsLoss()
@@ -203,13 +186,7 @@ def train(
         print(f"Epoch {epoch:02d} | train_loss={train_loss:.4f} | val_loss={val_loss:.4f}")
 
 @torch.no_grad()
-def evaluate(
-    model: nn.Module,
-    x_test: np.ndarray,
-    y_test: np.ndarray,
-    class_names: list[str],
-    eval_cfg: EvalConfig = EvalConfig(),
-):
+def evaluate(model: nn.Module, x_test: np.ndarray, y_test: np.ndarray, class_names: list[str], eval_cfg: EvalConfig = EvalConfig()):
     """Evaluate model predictions and print aggregate metrics."""
     model.eval()
     model.to(device)
@@ -250,6 +227,20 @@ def save_model(model: nn.Module, mlb: MultiLabelBinarizer, path: str, model_kwar
     }
     torch.save(payload, path)
     print(f"[saved] {path}")
+
+def predicted_scores_from_probabilities(probs: np.ndarray, class_names: list[str], threshold: float) -> tuple[list[dict[str, float | str]], list[str]]:
+    """Return thresholded tag scores sorted by confidence."""
+    pred_idxs = np.where(probs >= threshold)[0]
+    predicted_scores = sorted(
+        (
+            {"tag": class_names[i], "score": float(probs[i])}
+            for i in pred_idxs.tolist()
+        ),
+        key=lambda item: item["score"],
+        reverse=True,
+    )
+    predicted = [item["tag"] for item in predicted_scores]
+    return predicted_scores, predicted
 
 @torch.no_grad()
 def load_model(path: str) -> tuple[nn.Module, list[str]]:

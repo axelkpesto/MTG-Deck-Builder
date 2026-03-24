@@ -6,8 +6,8 @@ from typing import Dict, List, Optional
 import torch
 from torch_geometric.data import Data
 
-from vector_database import VectorDatabase
-from card_data import CardDecoder, SimpleDeck, SimpleDeckAnalyzer
+from backend.card_data import CardDecoder, SimpleDeck, SimpleDeckAnalyzer
+from backend.vector_database import VectorDatabase
 
 from .config import DeckGenPaths, GenConfig
 

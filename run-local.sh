@@ -38,7 +38,7 @@ cleanup() {
 trap cleanup EXIT INT TERM
 
 echo "Starting vector DB server on $BACKEND_URL"
-"$PYTHON_BIN" "$ROOT_DIR/backend/api/vector_db_server.py" &
+"$PYTHON_BIN" -m backend.api.vector_db_server &
 BACKEND_PID=$!
 
 php -S "127.0.0.1:${FRONTEND_PORT}" -t "$ROOT_DIR/frontend/public" &

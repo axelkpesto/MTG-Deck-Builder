@@ -87,7 +87,7 @@ deck_counts, stats = bundle.generate(commander_name="Atraxa, Praetors' Voice")
 ## API server
 Run locally:
 ```bash
-python backend/api/vector_db_server.py
+python -m backend.api.vector_db_server
 ```
 Server defaults:
 - Host: `0.0.0.0`

@@ -1,14 +1,10 @@
 """Build a lightweight card-name -> image URL dataset for frontend previews."""
 import json
-import sys
 from collections import defaultdict
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-if str(ROOT) not in sys.path:
-    sys.path.insert(0, str(ROOT))
-
-from config.config import CONFIG
+from backend.config.config import CONFIG
 
 
 def image_url_from_scryfall_id(card_id: str) -> str:
@@ -35,6 +31,7 @@ def add_card_image(image_map: dict[str, list[str]], seen_by_name: dict[str, set[
 
 
 def main() -> None:
+    """Build the frontend card image lookup dataset from AllPrintings."""
     all_printings_path = ROOT / CONFIG.datasets["FULL_DATASET_PATH"]
     output_path = ROOT / CONFIG.datasets["CARD_IMAGE_DATASET_PATH"]
 

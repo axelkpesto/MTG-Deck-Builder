@@ -63,7 +63,7 @@ class Deck:
         """Encode all cards in the deck into a stacked tensor."""
         return torch.stack([torch.tensor(encoder.encode(x)[1], dtype=torch.float32) for x in self.all_cards])
 
-    def shape_deck(self, commander_colors: List[str]) -> None:
+    def shape_deck(self, _commander_colors: List[str]) -> None:
         """Pad or trim deck cards to 99 entries using basics."""
         if len(self.cards) >= 99:
             self.cards = self.cards[:99]

@@ -9,8 +9,8 @@ from typing import Any, Dict, Iterable, List, Optional
 import requests
 from requests import RequestException
 
-from card_data import SimpleDeck
-from config import CONFIG
+from backend.card_data import SimpleDeck
+from backend.config import CONFIG
 
 MOXFIELD_BASE = "https://api2.moxfield.com/v2"
 DEFAULT_OUT_PATH = CONFIG.datasets["DECKS_DATASET_PATH"]
