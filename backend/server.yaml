@@ -1,2 +1,2 @@
 runtime: python312
-entrypoint: gunicorn -b :$PORT vector_db_server:app
+entrypoint: gunicorn -b :$PORT api.vector_db_server:app

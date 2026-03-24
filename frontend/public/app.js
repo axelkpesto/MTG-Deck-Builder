@@ -132,6 +132,47 @@
     }
     return parsed;
   }
+
+  function sleep(ms) {
+    return new Promise((resolve) => window.setTimeout(resolve, ms));
+  }
+
+  async function createDeckJob(commander) {
+    return callLocalJson("/generate_deck_job.php", { commander });
+  }
+
+  async function getDeckJobStatus(jobId) {
+    return callLocalJson(
+      `/generate_deck_job_status.php?id=${encodeURIComponent(jobId)}`,
+    );
+  }
+
+  async function getDeckJobResult(jobId) {
+    return callLocalJson(
+      `/generate_deck_job_result.php?id=${encodeURIComponent(jobId)}`,
+    );
+  }
+
+  async function waitForDeckJob(jobId) {
+    while (true) {
+      const status = await getDeckJobStatus(jobId);
+      if (status.status === "done") {
+        return getDeckJobResult(jobId);
+      }
+      if (status.status === "failed") {
+        throw new Error(status.error || "Deck generation failed.");
+      }
+
+      setStatus(
+        status.status === "running"
+          ? "Generating deck..."
+          : "Deck generation queued...",
+        "busy",
+      );
+      await sleep(1500);
+    }
+  }
+
   function parseImportLine(line) {
     const trimmed = line.trim();
     if (!trimmed) return null;
@@ -707,11 +748,9 @@
     state.commander = commander;
     setBusy(true, "Generating deck...");
     try {
-      const data = await callApi({
-        path: "/generate_deck",
-        method: "POST",
-        body: { id: commander },
-      });
+      const job = await createDeckJob(commander);
+      const jobResult = await waitForDeckJob(job.job_id);
+      const data = jobResult.result;
 
       const deckCounts = Array.isArray(data) ? data[0] : data;
       if (!deckCounts || typeof deckCounts !== "object") {
