@@ -28,9 +28,8 @@ AtomicCards.json
 
 #Unimportant Files
 LICENSE
-mtg_gpt.py
-test.py
 .dockerignore
+run-local.sh
 
 #Text Files
 *.txt
@@ -42,3 +41,5 @@ dataset_builders/
 documentation/
 tests/
 workers/
+legacy/
+frontend/
