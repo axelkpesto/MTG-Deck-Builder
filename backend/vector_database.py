@@ -460,5 +460,3 @@ if __name__ == "__main__":
     print(vd.find_id("Magnus"))
     print(vd.find_vector_pair("Abaddon"))
     print(vd.get_vector_description(vd.find_id("Mishra, Claimed by Gix")))
-
-    # vd.save(CONFIG.datasets["VECTOR_DATABASE_PATH"])
