@@ -1,0 +1,45 @@
+#General
+.env
+.gitignore
+.gitattributes
+.git/
+.vscode/
+.github/
+
+#Python
+*.pyc
+*.pyo
+*.pyd
+__pycache__
+.pytest_cache
+.python-version
+.pylintrc
+.mypy_cache/
+venv/
+
+#Readme
+README.md
+
+#Ignored Files
+AllPrintings.json
+parsed_cards.json
+variants.json
+AtomicCards.json
+
+#Unimportant Files
+LICENSE
+.gcloudignore
+run-local.sh
+
+#Text Files
+*.txt
+!requirements.txt
+!Dockerfile.txt
+
+#Unimportant Folders
+dataset_builders/
+documentation/
+tests/
+workers/
+legacy/
+frontend/
