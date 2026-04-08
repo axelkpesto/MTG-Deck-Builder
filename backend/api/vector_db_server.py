@@ -79,10 +79,9 @@ limiter = Limiter(
 
 auth_enabled = bool(int(os.environ.get("AUTHENTICATE", 1)))
 
-def error(message: str, status: int = 400, **extra: Any):
-    """Return a consistent JSON error payload."""
-    payload = {"error": message, **extra}
-    return jsonify(payload), status
+def error(message: str, status: int = 400):
+    """Return a consistent JSON error."""
+    return jsonify({"error": message}), status
 
 def clamp_int(x: int, lo: int, hi: int) -> int:
     """Clamp an integer to the inclusive range [lo, hi]."""
@@ -207,7 +206,7 @@ def _server_error(e):
     logger.exception("Unhandled server error: %s", e)
     return error("internal server error", 500)
 
-@app.route('/', methods=['GET'])
+@app.route('/', methods=['GET', 'POST'])
 def home():
     """Render a lightweight HTML landing page."""
     return "<h1>Vector Database Server</h1>" \
@@ -380,14 +379,14 @@ def get_vector():
     data = request.get_json(silent=True) or {}
     try:
         v_id = parse_required_card_id(data)
-    except ValueError as e:
-        return error(str(e), 400, received=data)
+    except ValueError:
+        return error("invalid request payload", 400)
 
     try:
         card_id = resolve_card_id(v_id)
         vector = vd.get(card_id)
     except KeyError:
-        return error("id not found", 400, requested_id=v_id)
+        return error("id not found", 400)
     return jsonify(
         {
             "id": card_id,
@@ -404,13 +403,13 @@ def get_vector_description():
     data = request.get_json(silent=True) or {}
     try:
         v_id = parse_required_card_id(data)
-    except ValueError as e:
-        return error(str(e), 400, received=data)
+    except ValueError:
+        return error("invalid request payload", 400)
 
     try:
         vector_id = resolve_card_id(v_id)
     except KeyError:
-        return error("id not found", 400, requested_id=v_id)
+        return error("id not found", 400)
 
     return jsonify(vd.get_vector_description_dict(vector_id))
 
@@ -422,8 +421,8 @@ def get_vector_descriptions():
     data = request.get_json(silent=True) or {}
     try:
         cards = parse_card_list_payload(data)
-    except ValueError as e:
-        return error(str(e), 400, received=data)
+    except ValueError:
+        return error("invalid request payload", 400)
 
     found: dict[str, dict[str, Any]] = {}
     missing: dict[str, dict[str, str]] = {}
@@ -467,22 +466,18 @@ def get_similar_vectors():
     data = request.get_json(silent=True) or {}
     try:
         v_id = parse_required_card_id(data)
-    except ValueError as e:
-        return error(str(e), 400, received=data)
+    except ValueError:
+        return error("invalid request payload", 400)
 
     try:
         vector = vd.get(resolve_card_id(v_id))
     except KeyError:
-        return error("id not found", 400, requested_id=v_id)
+        return error("id not found", 400)
 
     try:
         num_vectors = int(data.get("num_vectors", 5))
     except (TypeError, ValueError):
-        return error(
-            "num_vectors must be an integer",
-            400,
-            quantity=data.get("num_vectors"),
-        )
+        return error("num_vectors must be an integer", 400)
 
     num_vectors = clamp_int(num_vectors, 1, 1000)
     results_list: list[tuple] = vd.get_similar_vectors(vector, num_vectors)
@@ -502,24 +497,19 @@ def get_tags():
     data = request.get_json(silent=True) or {}
     try:
         v_id = parse_required_card_id(data)
-    except ValueError as e:
-        return error(str(e), 400, received=data)
+    except ValueError:
+        return error("invalid request payload", 400)
 
     try:
         card_id = resolve_card_id(v_id)
     except KeyError:
-        return error("id not found", 400, requested_id=v_id)
+        return error("id not found", 400)
 
     try:
         threshold = float(data.get("threshold", 0.5))
         top_k = int(data.get("top_k", 8))
     except (TypeError, ValueError):
-        return error(
-            "threshold and top_k must be numbers",
-            400,
-            threshold=data.get("threshold"),
-            top_k=data.get("top_k"),
-        )
+        return error("threshold and top_k must be numbers", 400)
     threshold = clamp_float(threshold, 0.0, 1.0)
     top_k = clamp_int(top_k, 1, 1000)
     return jsonify(predict_tags_for_card(card_id, threshold, top_k))
@@ -535,7 +525,7 @@ def get_tag_list():
         threshold = float(data.get("threshold", 0.5))
         top_k = int(data.get("top_k", 8))
     except (TypeError, ValueError):
-        return error("Invalid cards/threshold/top_k types", 400, received=data)
+        return error("invalid cards/threshold/top_k types", 400)
 
     threshold = clamp_float(threshold, 0.0, 1.0)
     top_k = clamp_int(top_k, 1, 1000)
@@ -560,14 +550,14 @@ def get_tags_from_vector():
     """Predict tags from a raw vector provided in request JSON."""
     data = request.get_json(silent=True) or {}
     if "vector" not in data or not isinstance(data["vector"], list):
-        return error("JSON body must include 'vector': [float, ...]", 400, received=data)
+        return error("JSON body must include 'vector': [float, ...]", 400)
 
     try:
         vec_np = np.asarray(data["vector"], dtype=np.float32)
         threshold = float(data.get("threshold", 0.5))
         top_k = int(data.get("top_k", 8))
     except (TypeError, ValueError):
-        return error("Invalid vector/threshold/top_k types", 400, received=data)
+        return error("invalid vector/threshold/top_k types", 400)
 
     threshold = clamp_float(threshold, 0.0, 1.0)
     top_k = clamp_int(top_k, 1, 1000)
@@ -580,13 +570,13 @@ def generate_deck():
     data = request.get_json(silent=True) or {}
     try:
         v_id = parse_required_card_id(data)
-    except ValueError as e:
-        return error(str(e), 400, received=data)
+    except ValueError:
+        return error("invalid request payload", 400)
 
     try:
         card = resolve_card_id(v_id)
     except KeyError:
-        return error("id not found", 400, requested_id=v_id)
+        return error("id not found", 400)
 
     return jsonify(gen.generate(card))
 
@@ -599,9 +589,9 @@ def analyze_deck():
     cards = data.get("cards")
 
     if not isinstance(commander, str) or not commander.strip():
-        return error("JSON body must include 'commander': 'Card Name'", 400, received=data)
+        return error("JSON body must include 'commander': 'Card Name'", 400)
     if not isinstance(cards, list) or not all(isinstance(c, str) for c in cards):
-        return error("JSON body must include 'cards': ['Card Name', ...]", 400, received=data)
+        return error("JSON body must include 'cards': ['Card Name', ...]", 400)
 
     deck = SimpleDeck.from_json(
         {
@@ -641,17 +631,15 @@ def predict_from_vector(vec_np: np.ndarray, threshold: float, top_k: int = 8):
     top_idx = np.argsort(probs)[-tk:][::-1]
     scores = [{"tag": class_names[i], "score": float(probs[i])} for i in top_idx]
 
-    _, predicted = predicted_scores_from_probabilities(
+    predicted_scores, predicted = predicted_scores_from_probabilities(
         probs=probs,
         class_names=class_names,
         threshold=threshold,
     )
 
-    if not predicted:
-        predicted = [s["tag"] for s in scores]
-
     return {
         "predicted": predicted,
+        "predicted_scores": predicted_scores,
         "scores": scores,
         "threshold": float(threshold)
     }
