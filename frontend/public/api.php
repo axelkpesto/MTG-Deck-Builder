@@ -3,8 +3,8 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/../config.php';
 
-ini_set('max_execution_time', '120');
-set_time_limit(120);
+ini_set('max_execution_time', '300');
+set_time_limit(300);
 $cfg = app_config();
 app_require_user();
 $input = app_json_input();
@@ -54,14 +54,17 @@ $headers = [
     'X-API-KEY: ' . $cfg['mtg_global_api_key'],
 ];
 
+$timeoutSeconds = str_starts_with($path, '/generate_deck') ? 300 : 60;
+$connectTimeoutSeconds = str_starts_with($path, '/generate_deck') ? 30 : 15;
+
 $ch = curl_init($url);
 curl_setopt_array($ch, [
     CURLOPT_CUSTOMREQUEST => $method,
     CURLOPT_RETURNTRANSFER => true,
     CURLOPT_HTTPHEADER => $headers,
     CURLOPT_IPRESOLVE => CURL_IPRESOLVE_V4,
-    CURLOPT_CONNECTTIMEOUT => 15,
-    CURLOPT_TIMEOUT => 60,
+    CURLOPT_CONNECTTIMEOUT => $connectTimeoutSeconds,
+    CURLOPT_TIMEOUT => $timeoutSeconds,
 ]);
 
 if ($method === 'POST') {
@@ -75,15 +78,17 @@ $curlErrno = curl_errno($ch);
 curl_close($ch);
 
 if ($response === false) {
+    $isTimeout = in_array($curlErrno, [CURLE_OPERATION_TIMEDOUT], true);
     app_json([
-        'error' => 'Upstream request failed',
+        'error' => $isTimeout ? 'Upstream request timed out' : 'Upstream request failed',
         'details' => [
             'message' => $curlError,
             'errno' => $curlErrno,
             'url' => $url,
             'method' => $method,
+            'timeout_seconds' => $timeoutSeconds,
         ],
-    ], 502);
+    ], $isTimeout ? 504 : 502);
 }
 
 http_response_code($status > 0 ? $status : 502);
