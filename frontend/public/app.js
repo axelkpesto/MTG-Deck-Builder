@@ -1365,7 +1365,6 @@
     }
   }
 
-
   const COLOR_MODAL_STYLE = {
     W: { bg: "#f5f0e0", fg: "#5a4a00", label: "White" },
     U: { bg: "#1a3a6e", fg: "#b8d4f8", label: "Blue" },
