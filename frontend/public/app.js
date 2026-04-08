@@ -1276,12 +1276,7 @@
 
       decks.forEach((deck) => {
         const cardCount = Number(deck.card_count || 0);
-        const cardNames = Array.isArray(deck.cards)
-          ? deck.cards
-              .map((card) => String(card.name || ""))
-              .filter(Boolean)
-              .slice(0, 3)
-          : [];
+        const deckCommander = deck.cards?.commander || "";
 
         const card = document.createElement("article");
         card.className = "saved-card";
@@ -1289,19 +1284,15 @@
         const title = document.createElement("a");
         title.className = "saved-card-title";
         title.href = `/?deck=${encodeURIComponent(deck.id)}`;
-        title.textContent = deck.title || deck.commander || "Untitled Deck";
+        title.textContent = deck.title || deckCommander || "Untitled Deck";
 
         const commander = document.createElement("div");
         commander.className = "saved-card-commander";
-        commander.textContent = deck.commander || "Unknown Commander";
+        commander.textContent = deckCommander || "Unknown Commander";
 
         const meta = document.createElement("div");
         meta.className = "saved-card-meta";
         meta.textContent = `${cardCount} cards - Updated ${formatDate(deck.updated_at)}`;
-
-        const sample = document.createElement("div");
-        sample.className = "saved-card-sample";
-        sample.textContent = cardNames.join(" - ");
 
         const open = document.createElement("a");
         open.className = "button ghost";
@@ -1315,7 +1306,7 @@
         del.addEventListener("click", async () => {
           if (
             !window.confirm(
-              `Delete "${deck.title || deck.commander || "this deck"}"? This cannot be undone.`,
+              `Delete "${deck.title || deckCommander || "this deck"}"? This cannot be undone.`,
             )
           )
             return;
@@ -1349,7 +1340,6 @@
         card.appendChild(title);
         card.appendChild(commander);
         card.appendChild(meta);
-        if (cardNames.length > 0) card.appendChild(sample);
         card.appendChild(actions);
         els.savedDecksList.appendChild(card);
       });

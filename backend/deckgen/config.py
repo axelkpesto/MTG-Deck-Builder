@@ -27,6 +27,7 @@ class DeckGenPaths:
     decks_json: str = CONFIG.datasets["DECKS_DATASET_PATH"]
     tags_json: str = CONFIG.datasets["TAGS_DATASET_PATH"]
     ckpt_pt: str = CONFIG.models["GEN_MODEL_PATH"]
+    node_embeddings_pt: str = CONFIG.datasets["NODE_EMBEDDINGS_PATH"]
 
 
 @dataclass(frozen=True)

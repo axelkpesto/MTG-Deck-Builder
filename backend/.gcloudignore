@@ -1,4 +1,4 @@
-#General
+# General
 .env
 .gitignore
 .gitattributes
@@ -6,7 +6,7 @@
 .vscode/
 .github/
 
-#Python
+# Python
 *.pyc
 *.pyo
 *.pyd
@@ -17,29 +17,28 @@ __pycache__
 .mypy_cache/
 venv/
 
-#Readme
+# Readme
 README.md
 
-#Ignored Files
+# Large data files
 AllPrintings.json
 parsed_cards.json
 variants.json
 AtomicCards.json
 
-#Unimportant Files
+# Unimportant files
 LICENSE
 .dockerignore
 run-local.sh
 
-#Text Files
+# Text files (except requirements)
 *.txt
 !requirements.txt
-!Dockerfile.txt
 
-#Unimportant Folders
+# Unimportant folders
 dataset_builders/
 documentation/
 tests/
 workers/
 legacy/
-frontend/
+credentials/

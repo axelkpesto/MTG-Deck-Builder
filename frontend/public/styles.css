@@ -658,10 +658,7 @@ select,
 }
 
 .stats-layout {
-  display: grid;
-  grid-template-columns: 1fr 260px;
-  gap: 20px;
-  align-items: start;
+  display: block;
 }
 
 .stats-bar-row {
@@ -692,13 +689,16 @@ select,
 }
 
 .color-stat-grid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
   gap: 10px;
   margin: 16px 0;
 }
 
 .color-stat-card {
+  flex: 0 1 calc(33.333% - 10px);
+  min-width: 200px;
   border: 1px solid var(--line);
   border-radius: 12px;
   background: rgba(255, 255, 255, 0.02);
@@ -745,67 +745,6 @@ select,
   color: var(--muted);
 }
 
-.stats-sidebar-inner {
-  border: 1px solid var(--line);
-  border-radius: 14px;
-  background: rgba(13, 13, 13, 0.7);
-  padding: 16px;
-  position: sticky;
-  top: 20px;
-}
-
-.stats-tabs {
-  display: flex;
-  border-bottom: 1px solid var(--line);
-  margin-bottom: 14px;
-}
-
-.stats-tab {
-  flex: 1;
-  border: 0;
-  background: transparent;
-  color: var(--muted);
-  padding: 8px 4px;
-  font: inherit;
-  font-size: 13px;
-  cursor: pointer;
-  border-bottom: 2px solid transparent;
-  margin-bottom: -1px;
-  transition: color 0.15s, border-color 0.15s;
-}
-
-.stats-tab:hover {
-  color: var(--text);
-}
-
-.stats-tab.is-active {
-  color: var(--accent-strong);
-  border-bottom-color: var(--accent-strong);
-}
-
-.stats-filter-row {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 10px;
-  margin-bottom: 12px;
-}
-
-.stats-filter-label {
-  font-size: 12px;
-  color: var(--muted);
-  margin-bottom: 5px;
-}
-
-.stats-filter-select {
-  padding: 8px 10px;
-  font-size: 12px;
-}
-
-.stats-hint {
-  font-size: 12px;
-  text-align: center;
-  margin: 0;
-}
 
 .analysis-section-heading {
   font-size: 12px;
@@ -857,12 +796,8 @@ select,
     grid-template-columns: 1fr 1fr;
   }
 
-  .stats-layout {
-    grid-template-columns: 1fr;
-  }
-
-  .color-stat-grid {
-    grid-template-columns: repeat(2, 1fr);
+  .color-stat-card {
+    flex: 0 1 calc(50% - 10px);
   }
 
   .stats-summary-grid {

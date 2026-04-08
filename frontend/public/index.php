@@ -139,32 +139,6 @@ $user = $_SESSION['user'] ?? null;
                 <div class="analysis-section-heading">Primary Tags</div>
                 <div id="analysisTags" class="chip-wrap"></div>
               </div>
-              <div class="stats-sidebar">
-                <div class="stats-sidebar-inner">
-                  <div class="stats-tabs">
-                    <button class="stats-tab is-active">Focused</button>
-                    <button class="stats-tab">Selected</button>
-                    <button class="stats-tab">Full deck</button>
-                  </div>
-                  <div class="stats-filter-row">
-                    <div class="group">
-                      <div class="stats-filter-label">Group by</div>
-                      <select class="input stats-filter-select">
-                        <option>Categories</option>
-                        <option>Tags</option>
-                      </select>
-                    </div>
-                    <div class="group">
-                      <div class="stats-filter-label">Sort by</div>
-                      <select class="input stats-filter-select">
-                        <option>Alphabet</option>
-                        <option>Quantity</option>
-                      </select>
-                    </div>
-                  </div>
-                  <p class="stats-hint subtle">Click charts to focus on cards</p>
-                </div>
-              </div>
             </div>
           </div>
         </section>

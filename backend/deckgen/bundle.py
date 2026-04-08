@@ -1,4 +1,5 @@
 """Bundle model loading, assets, and deck generation utilities."""
+import os
 from typing import Dict, Optional, Tuple
 
 import torch
@@ -42,10 +43,22 @@ class DeckGenBundle:
             dropout=float(train["dropout"]),
         ).to(dev)
 
-        model.load_state_dict(ckpt["state_dict"], strict=True)
+        # Support both old ("state_dict") and new ("model_state_dict") checkpoint formats
+        state_dict = ckpt.get("state_dict") or ckpt.get("model_state_dict")
+        model.load_state_dict(state_dict, strict=True)
         model.eval()
 
-        return cls(model=model, assets=assets, gen=gen, device=dev)
+        # Load pre-computed node embeddings to avoid running the full GNN encode
+        # at runtime. The GCNConv message pass creates (num_edges × hidden_dim)
+        # intermediate tensors — on a large graph this easily exceeds 32 GB RAM.
+        # Priority: dedicated file → checkpoint blob → None (triggers warmup encode).
+        node_embeddings: Optional[torch.Tensor] = None
+        if os.path.isfile(paths.node_embeddings_pt):
+            node_embeddings = torch.load(paths.node_embeddings_pt, map_location=dev, weights_only=True)
+        elif "node_embeddings" in ckpt:
+            node_embeddings = ckpt["node_embeddings"].to(dev)
+
+        return cls(model=model, assets=assets, gen=gen, device=dev, node_embeddings=node_embeddings)
 
     @torch.inference_mode()
     def get_node_embeddings(self) -> torch.Tensor:
