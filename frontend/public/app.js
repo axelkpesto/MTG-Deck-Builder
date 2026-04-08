@@ -24,12 +24,12 @@
   );
 
   const MANA_COLORS = {
-    W: { label: "White",     bg: "#f4edd0", fg: "#5a4a1a" },
-    U: { label: "Blue",      bg: "#7ab8d9", fg: "#002b49" },
-    B: { label: "Black",     bg: "#4a4a4a", fg: "#e0e0e0" },
-    R: { label: "Red",       bg: "#d4622c", fg: "#fff"    },
-    G: { label: "Green",     bg: "#4e9b4e", fg: "#fff"    },
-    C: { label: "Colorless", bg: "#a8a8a8", fg: "#fff"    },
+    W: { label: "White", bg: "#f4edd0", fg: "#5a4a1a" },
+    U: { label: "Blue", bg: "#7ab8d9", fg: "#002b49" },
+    B: { label: "Black", bg: "#4a4a4a", fg: "#e0e0e0" },
+    R: { label: "Red", bg: "#d4622c", fg: "#fff" },
+    G: { label: "Green", bg: "#4e9b4e", fg: "#fff" },
+    C: { label: "Colorless", bg: "#a8a8a8", fg: "#fff" },
   };
 
   const state = {
@@ -108,9 +108,11 @@
     if (typeof text === "string") {
       setStatus(text, value ? "busy" : "");
     }
-    [els.generateBtn, els.completeBtn, els.importBtn, els.saveBtn].forEach((btn) => {
-      if (btn) btn.disabled = value;
-    });
+    [els.generateBtn, els.completeBtn, els.importBtn, els.saveBtn].forEach(
+      (btn) => {
+        if (btn) btn.disabled = value;
+      },
+    );
   }
 
   async function getSession() {
@@ -166,9 +168,11 @@
     const trimmed = line.trim();
     if (!trimmed) return null;
     const leadQty = trimmed.match(/^(\d+)\s+(.+)$/);
-    if (leadQty) return { quantity: Number(leadQty[1]), name: leadQty[2].trim() };
+    if (leadQty)
+      return { quantity: Number(leadQty[1]), name: leadQty[2].trim() };
     const trailQty = trimmed.match(/^(.+)\s+x(\d+)$/i);
-    if (trailQty) return { quantity: Number(trailQty[2]), name: trailQty[1].trim() };
+    if (trailQty)
+      return { quantity: Number(trailQty[2]), name: trailQty[1].trim() };
     return { quantity: 1, name: trimmed };
   }
 
@@ -194,7 +198,6 @@
       .trim()
       .replace(/\b\w/g, (match) => match.toUpperCase());
   }
-
 
   function parseListString(value) {
     if (Array.isArray(value)) return value.map((item) => String(item));
@@ -248,7 +251,11 @@
     uniqueNames.forEach((name) => {
       const meta = metaData.found?.[name];
       if (!meta) return;
-      const normalized = normalizeMeta(name, meta, imageData.found?.[name] || []);
+      const normalized = normalizeMeta(
+        name,
+        meta,
+        imageData.found?.[name] || [],
+      );
       state.metaCache[name] = normalized;
       state.metaCache[normalized.name] = normalized;
     });
@@ -288,7 +295,9 @@
 
   function getDeckTitle() {
     const commander = getCommander();
-    return state.deckTitle || (commander ? `${commander} Deck` : "Untitled Deck");
+    return (
+      state.deckTitle || (commander ? `${commander} Deck` : "Untitled Deck")
+    );
   }
 
   function imageUrlFromMeta(meta) {
@@ -301,9 +310,12 @@
 
   function getCardCategory(card) {
     if (!card) return "Other";
-    if (card.primaryTag === "Commander" || card.name === getCommander()) return "Commander";
+    if (card.primaryTag === "Commander" || card.name === getCommander())
+      return "Commander";
     const meta = state.metaCache[card.name];
-    const types = Array.isArray(meta?.types) ? meta.types.map((type) => String(type).toLowerCase()) : [];
+    const types = Array.isArray(meta?.types)
+      ? meta.types.map((type) => String(type).toLowerCase())
+      : [];
     for (const type of types) {
       if (CATEGORY_LABELS[type]) return CATEGORY_LABELS[type];
     }
@@ -313,7 +325,8 @@
 
   function getCardGroup(card) {
     if (!card) return "Other";
-    if (card.primaryTag === "Commander" || card.name === getCommander()) return "Commander";
+    if (card.primaryTag === "Commander" || card.name === getCommander())
+      return "Commander";
     // Always put land-typed cards in Land regardless of tag (e.g. lands tagged Ramp)
     if (getCardCategory(card) === "Land") return "Land";
     const tag = formatTag(card.primaryTag || "");
@@ -321,7 +334,10 @@
   }
 
   function totalCardCount() {
-    return state.cards.reduce((sum, card) => sum + Number(card.quantity || 0), 0);
+    return state.cards.reduce(
+      (sum, card) => sum + Number(card.quantity || 0),
+      0,
+    );
   }
 
   function updateDeckHeader() {
@@ -384,14 +400,23 @@
     const curve = summary.curve?.mana_curve?.counts || [];
     const lands = summary.lands?.lands || {};
 
-    const BASIC_TO_COLOR = { Plains: "W", Island: "U", Swamp: "B", Mountain: "R", Forest: "G" };
+    const BASIC_TO_COLOR = {
+      Plains: "W",
+      Island: "U",
+      Swamp: "B",
+      Mountain: "R",
+      Forest: "G",
+    };
     const basicTypes = lands.basic_types || {};
     const production = { W: 0, U: 0, B: 0, R: 0, G: 0 };
     Object.entries(basicTypes).forEach(([type, count]) => {
       const c = BASIC_TO_COLOR[type];
       if (c) production[c] = Number(count || 0);
     });
-    const totalProduction = Object.values(production).reduce((a, b) => a + b, 0);
+    const totalProduction = Object.values(production).reduce(
+      (a, b) => a + b,
+      0,
+    );
     const productionPercents = { W: 0, U: 0, B: 0, R: 0, G: 0 };
     if (totalProduction > 0) {
       Object.keys(productionPercents).forEach((c) => {
@@ -399,20 +424,37 @@
       });
     }
 
-    const COLOR_IMAGE = { W: "/assets/plains.png", U: "/assets/island.png", B: "/assets/swamp.png", R: "/assets/mountain.png", G: "/assets/forest.png" };
+    const COLOR_IMAGE = {
+      W: "/assets/plains.png",
+      U: "/assets/island.png",
+      B: "/assets/swamp.png",
+      R: "/assets/mountain.png",
+      G: "/assets/forest.png",
+    };
 
     els.analysisEmpty.hidden = true;
     els.analysisPanel.hidden = false;
     els.analysisSummary.innerHTML = "";
-    els.analysisSummary.appendChild(renderSummaryMetric("Cards", buildAnalysisCards().length));
-    els.analysisSummary.appendChild(renderSummaryMetric("Unique", state.cards.length));
-    els.analysisSummary.appendChild(renderSummaryMetric("Lands", lands.land_count || 0));
-    els.analysisSummary.appendChild(renderSummaryMetric("Basics", lands.basic_count || 0));
+    els.analysisSummary.appendChild(
+      renderSummaryMetric("Cards", buildAnalysisCards().length),
+    );
+    els.analysisSummary.appendChild(
+      renderSummaryMetric("Unique", state.cards.length),
+    );
+    els.analysisSummary.appendChild(
+      renderSummaryMetric("Lands", lands.land_count || 0),
+    );
+    els.analysisSummary.appendChild(
+      renderSummaryMetric("Basics", lands.basic_count || 0),
+    );
 
     // Cost bar: segmented by color
     if (els.costBar) {
       els.costBar.innerHTML = "";
-      const totalPct = ["W", "U", "B", "R", "G"].reduce((s, c) => s + Number(colorPercents[c] || 0), 0);
+      const totalPct = ["W", "U", "B", "R", "G"].reduce(
+        (s, c) => s + Number(colorPercents[c] || 0),
+        0,
+      );
       const colorlessWidth = Math.max(0, 1 - totalPct);
       ["W", "U", "B", "R", "G"].forEach((c) => {
         const pct = Number(colorPercents[c] || 0);
@@ -454,7 +496,6 @@
       }
     }
 
-    // Color stat grid: one card per color with cost + production bars
     if (els.analysisColors) {
       els.analysisColors.innerHTML = "";
       ["W", "U", "B", "R", "G"].forEach((c) => {
@@ -559,7 +600,10 @@
       return b.quantity - a.quantity || a.name.localeCompare(b.name);
     }
     if (state.sortBy === "tag") {
-      return formatTag(a.primaryTag).localeCompare(formatTag(b.primaryTag)) || a.name.localeCompare(b.name);
+      return (
+        formatTag(a.primaryTag).localeCompare(formatTag(b.primaryTag)) ||
+        a.name.localeCompare(b.name)
+      );
     }
     const ag = getCardGroup(a);
     const bg = getCardGroup(b);
@@ -644,7 +688,10 @@
     qtyBadge.title = `${card.name} ×${card.quantity} — click to change`;
     qtyBadge.addEventListener("click", (event) => {
       event.stopPropagation();
-      const next = window.prompt(`Quantity for ${card.name}`, String(card.quantity));
+      const next = window.prompt(
+        `Quantity for ${card.name}`,
+        String(card.quantity),
+      );
       if (next === null) return;
       qtyBadge.textContent = String(Math.max(1, Math.floor(Number(next) || 1)));
       updateCardQuantity(card, next);
@@ -662,10 +709,16 @@
     });
     cardEl.appendChild(removeBtn);
 
-    cardEl.addEventListener("mouseenter", () => cardEl.classList.add("is-active"));
-    cardEl.addEventListener("mouseleave", () => cardEl.classList.remove("is-active"));
+    cardEl.addEventListener("mouseenter", () =>
+      cardEl.classList.add("is-active"),
+    );
+    cardEl.addEventListener("mouseleave", () =>
+      cardEl.classList.remove("is-active"),
+    );
     cardEl.addEventListener("focusin", () => cardEl.classList.add("is-active"));
-    cardEl.addEventListener("focusout", () => cardEl.classList.remove("is-active"));
+    cardEl.addEventListener("focusout", () =>
+      cardEl.classList.remove("is-active"),
+    );
     cardEl.addEventListener("click", () => {
       loadCardMeta(card.name).then((meta) => openCardModal(card, meta));
     });
@@ -713,10 +766,12 @@
 
       const imageStack = document.createElement("div");
       imageStack.className = "column-image-stack";
-      const cardNodes = sortedCards.map((card, index) => createStackCard(card, index));
+      const cardNodes = sortedCards.map((card, index) =>
+        createStackCard(card, index),
+      );
       cardNodes.forEach((node) => imageStack.appendChild(node));
 
-      const PEEK = 36;       // px visible per card
+      const PEEK = 36; // px visible per card
       cardNodes.forEach((node, index) => {
         node.style.top = `${index * PEEK}px`;
         node.style.zIndex = String(10 + index);
@@ -736,7 +791,9 @@
     if (!commander) return;
     state.commander = commander;
 
-    const existing = state.cards.find((card) => card.name.toLowerCase() === commander.toLowerCase());
+    const existing = state.cards.find(
+      (card) => card.name.toLowerCase() === commander.toLowerCase(),
+    );
     if (existing) {
       existing.quantity = 1;
       existing.tags = ["Commander"];
@@ -786,7 +843,10 @@
       body: { id: item.name, threshold: 0.5, top_k: 8 },
     });
     const images = await fetchCardImages([item.name]);
-    const normalized = normalizeTagPayload(tagData.predicted, tagData.predicted_scores || tagData.scores);
+    const normalized = normalizeTagPayload(
+      tagData.predicted,
+      tagData.predicted_scores || tagData.scores,
+    );
     const resolvedName =
       typeof meta.card_name === "string" && meta.card_name.trim()
         ? meta.card_name.trim()
@@ -870,7 +930,8 @@
     const cards = buildAnalysisCards();
     if (!commander || cards.length === 0) {
       state.analysis = null;
-      els.analysisMeta.textContent = "Add cards or generate a deck to see analysis.";
+      els.analysisMeta.textContent =
+        "Add cards or generate a deck to see analysis.";
       renderAnalysis();
       return;
     }
@@ -936,13 +997,15 @@
       }
 
       state.currentDeckId = "";
-      state.cards = [{
-        id: uid(),
-        name: commander,
-        quantity: 1,
-        tags: ["Commander"],
-        primaryTag: "Commander",
-      }];
+      state.cards = [
+        {
+          id: uid(),
+          name: commander,
+          quantity: 1,
+          tags: ["Commander"],
+          primaryTag: "Commander",
+        },
+      ];
 
       const generatedCards = [];
       Object.entries(deckCounts).forEach(([name, quantity]) => {
@@ -989,7 +1052,9 @@
         body: { id: commander, num_vectors: 30 },
       });
 
-      const existing = new Set(state.cards.map((card) => card.name.toLowerCase()));
+      const existing = new Set(
+        state.cards.map((card) => card.name.toLowerCase()),
+      );
       const additions = [];
       Object.values(data || {}).forEach((entry) => {
         if (!entry || typeof entry.card_name !== "string") return;
@@ -1003,7 +1068,9 @@
       const untagged = state.cards.filter((card) => !card.primaryTag);
       if (untagged.length > 0) {
         const enriched = await enrichCards(untagged);
-        const taggedByName = new Map(enriched.cards.map((card) => [card.name.toLowerCase(), card]));
+        const taggedByName = new Map(
+          enriched.cards.map((card) => [card.name.toLowerCase(), card]),
+        );
         state.cards = state.cards.map((card) => {
           const taggedCard = taggedByName.get(card.name.toLowerCase());
           if (!taggedCard) return card;
@@ -1107,7 +1174,10 @@
     state.deckTitle = nextTitle.trim() || `${commander} Deck`;
     updateDeckHeader();
 
-    setBusy(true, state.currentDeckId ? "Updating saved deck..." : "Saving deck...");
+    setBusy(
+      true,
+      state.currentDeckId ? "Updating saved deck..." : "Saving deck...",
+    );
     try {
       const result = await callLocalJson("/decks.php", {
         deck: buildPersistedDeck(),
@@ -1133,7 +1203,9 @@
   }
 
   async function loadDeck(deckId) {
-    const result = await callLocalJson(`/decks.php?id=${encodeURIComponent(deckId)}`);
+    const result = await callLocalJson(
+      `/decks.php?id=${encodeURIComponent(deckId)}`,
+    );
     const savedDeck = result.deck;
     if (!savedDeck) throw new Error("Missing saved deck payload");
 
@@ -1144,7 +1216,9 @@
     state.commander = savedCommander;
     if (els.commander) els.commander.value = savedCommander;
 
-    const persistedCards = Array.isArray(savedCards?.cards) ? savedCards.cards : [];
+    const persistedCards = Array.isArray(savedCards?.cards)
+      ? savedCards.cards
+      : [];
     const cardRows = persistedCards
       .map((card) => ({
         name: String(card.name || "").trim(),
@@ -1152,10 +1226,15 @@
         tags: Array.isArray(card.tags) ? card.tags : [],
         primaryTag: String(card.primaryTag || "").trim(),
       }))
-      .filter((card) => card.name && card.name.toLowerCase() !== savedCommander.toLowerCase());
+      .filter(
+        (card) =>
+          card.name && card.name.toLowerCase() !== savedCommander.toLowerCase(),
+      );
 
     const needsEnrichment = cardRows.some((card) => !card.primaryTag);
-    const hydratedCards = needsEnrichment ? (await enrichCards(cardRows)).cards : cardRows;
+    const hydratedCards = needsEnrichment
+      ? (await enrichCards(cardRows)).cards
+      : cardRows;
 
     state.cards = hydratedCards.map((card) => ({
       id: uid(),
@@ -1198,7 +1277,10 @@
       decks.forEach((deck) => {
         const cardCount = Number(deck.card_count || 0);
         const cardNames = Array.isArray(deck.cards)
-          ? deck.cards.map((card) => String(card.name || "")).filter(Boolean).slice(0, 3)
+          ? deck.cards
+              .map((card) => String(card.name || ""))
+              .filter(Boolean)
+              .slice(0, 3)
           : [];
 
         const card = document.createElement("article");
@@ -1231,15 +1313,27 @@
         del.type = "button";
         del.textContent = "Delete";
         del.addEventListener("click", async () => {
-          if (!window.confirm(`Delete "${deck.title || deck.commander || "this deck"}"? This cannot be undone.`)) return;
+          if (
+            !window.confirm(
+              `Delete "${deck.title || deck.commander || "this deck"}"? This cannot be undone.`,
+            )
+          )
+            return;
           del.disabled = true;
           del.textContent = "Deleting…";
           try {
-            await callLocalJson(`/decks.php?id=${encodeURIComponent(deck.id)}`, null, "DELETE");
+            await callLocalJson(
+              `/decks.php?id=${encodeURIComponent(deck.id)}`,
+              null,
+              "DELETE",
+            );
             card.remove();
-            const remaining = els.savedDecksList.querySelectorAll(".saved-card").length;
-            if (els.savedStatus) els.savedStatus.textContent = `${remaining} saved deck${remaining === 1 ? "" : "s"}.`;
-            if (els.savedDecksEmpty) els.savedDecksEmpty.hidden = remaining !== 0;
+            const remaining =
+              els.savedDecksList.querySelectorAll(".saved-card").length;
+            if (els.savedStatus)
+              els.savedStatus.textContent = `${remaining} saved deck${remaining === 1 ? "" : "s"}.`;
+            if (els.savedDecksEmpty)
+              els.savedDecksEmpty.hidden = remaining !== 0;
           } catch (err) {
             reportError("deleteDeck failed", err);
             del.disabled = false;
@@ -1261,35 +1355,38 @@
       });
     } catch (err) {
       reportError("renderSavedDecks failed", err);
-      if (els.savedStatus) els.savedStatus.textContent = "Failed to load saved decks.";
+      if (els.savedStatus)
+        els.savedStatus.textContent = "Failed to load saved decks.";
       if (els.savedDecksEmpty) {
         els.savedDecksEmpty.hidden = false;
-        els.savedDecksEmpty.textContent = "Unable to load saved decks right now.";
+        els.savedDecksEmpty.textContent =
+          "Unable to load saved decks right now.";
       }
     }
   }
 
-  // ── Card Detail Modal ────────────────────────────────────────────
 
   const COLOR_MODAL_STYLE = {
     W: { bg: "#f5f0e0", fg: "#5a4a00", label: "White" },
-    U: { bg: "#1a3a6e", fg: "#b8d4f8", label: "Blue"  },
+    U: { bg: "#1a3a6e", fg: "#b8d4f8", label: "Blue" },
     B: { bg: "#2a1a3a", fg: "#c8b8e8", label: "Black" },
-    R: { bg: "#6e1a1a", fg: "#f8c8b8", label: "Red"   },
+    R: { bg: "#6e1a1a", fg: "#f8c8b8", label: "Red" },
     G: { bg: "#1a3a1a", fg: "#b8e8c8", label: "Green" },
-    C: { bg: "#444",    fg: "#ccc",    label: "Colorless" },
+    C: { bg: "#444", fg: "#ccc", label: "Colorless" },
   };
 
   const RARITY_STYLE = {
-    common:   { bg: "#444",    fg: "#ccc"    },
+    common: { bg: "#444", fg: "#ccc" },
     uncommon: { bg: "#607a8a", fg: "#e0eaf0" },
-    rare:     { bg: "#7a6020", fg: "#f8e8a0" },
-    mythic:   { bg: "#8a3010", fg: "#f8c880" },
+    rare: { bg: "#7a6020", fg: "#f8e8a0" },
+    mythic: { bg: "#8a3010", fg: "#f8c880" },
   };
 
   async function fetchScryfallCard(cardId) {
     try {
-      const resp = await fetch(`https://api.scryfall.com/cards/${encodeURIComponent(cardId)}`);
+      const resp = await fetch(
+        `https://api.scryfall.com/cards/${encodeURIComponent(cardId)}`,
+      );
       if (!resp.ok) return null;
       return resp.json();
     } catch {
@@ -1303,7 +1400,6 @@
   }
 
   function openCardModal(card, meta) {
-
     const raw = meta.raw || {};
     const imageUrl = imageUrlFromMeta(meta);
 
@@ -1319,17 +1415,21 @@
 
     // Type line
     const supertypes = parseListString(raw.Supertypes || raw.supertypes || []);
-    const types      = parseListString(raw.Types      || raw.types      || []);
-    const subtypes   = parseListString(raw.Subtypes   || raw.subtypes   || []);
+    const types = parseListString(raw.Types || raw.types || []);
+    const subtypes = parseListString(raw.Subtypes || raw.subtypes || []);
     const typeStr = [
       [...supertypes, ...types].join(" "),
       subtypes.length ? `— ${subtypes.join(" ")}` : "",
-    ].filter(Boolean).join(" ");
+    ]
+      .filter(Boolean)
+      .join(" ");
     els.cardModalTypeline.textContent = typeStr || "—";
 
     // Badges: color identity + rarity
     els.cardModalBadges.innerHTML = "";
-    const colors = parseListString(raw["Color Identity"] || raw.color_identity || []);
+    const colors = parseListString(
+      raw["Color Identity"] || raw.color_identity || [],
+    );
     colors.forEach((c) => {
       const key = c.toUpperCase();
       const style = COLOR_MODAL_STYLE[key] || COLOR_MODAL_STYLE.C;
@@ -1373,7 +1473,8 @@
           showTagFallback(card);
           return;
         }
-        els.cardModalOracle.textContent = sf.oracle_text || sf.card_faces?.[0]?.oracle_text || "";
+        els.cardModalOracle.textContent =
+          sf.oracle_text || sf.card_faces?.[0]?.oracle_text || "";
         if (!els.cardModalOracle.textContent) showTagFallback(card);
         const flavor = sf.flavor_text || sf.card_faces?.[0]?.flavor_text || "";
         els.cardModalFlavor.textContent = flavor;
