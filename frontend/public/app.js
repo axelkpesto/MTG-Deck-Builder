@@ -760,7 +760,18 @@
       const totalQty = cards.reduce((sum, c) => sum + c.quantity, 0);
       const header = document.createElement("header");
       header.className = "deck-column-header";
-      header.innerHTML = `<div class="deck-column-title">${group}<span class="deck-column-qty">Qty: ${cards.length}</span></div><div class="deck-column-count">${totalQty}</div>`;
+      const titleDiv = document.createElement("div");
+      titleDiv.className = "deck-column-title";
+      titleDiv.textContent = group;
+      const qtySpan = document.createElement("span");
+      qtySpan.className = "deck-column-qty";
+      qtySpan.textContent = `Qty: ${cards.length}`;
+      titleDiv.appendChild(qtySpan);
+      const countDiv = document.createElement("div");
+      countDiv.className = "deck-column-count";
+      countDiv.textContent = String(totalQty);
+      header.appendChild(titleDiv);
+      header.appendChild(countDiv);
 
       const sortedCards = cards.slice().sort((a, b) => b.quantity - a.quantity);
 

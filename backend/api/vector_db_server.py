@@ -651,7 +651,6 @@ def main() -> None:
 
 if __name__ == '__main__':
     main()
-    load_dotenv()
     API_KEY = os.environ.get("FIREBASE_API_KEY", "")
     URL = "http://127.0.0.1:5000/get_random_vector"
 

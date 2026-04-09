@@ -1,6 +1,11 @@
 <?php
 declare(strict_types=1);
 
+header("X-Frame-Options: DENY");
+header("X-Content-Type-Options: nosniff");
+header("Referrer-Policy: strict-origin-when-cross-origin");
+header("Content-Security-Policy: default-src 'self'; img-src 'self' data: https://cards.scryfall.io https://api.scryfall.com; style-src 'self' 'unsafe-inline'; connect-src 'self' https://api.scryfall.com;");
+
 function env_required(string $name): string
 {
     $value = getenv($name);
@@ -38,7 +43,8 @@ function app_start_session(): void
         'lifetime' => 0,
         'path' => '/',
         'domain' => '',
-        'secure' => isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off',
+        'secure' => (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off')
+                 || (isset($_SERVER['HTTP_X_FORWARDED_PROTO']) && $_SERVER['HTTP_X_FORWARDED_PROTO'] === 'https'),
         'httponly' => true,
         'samesite' => 'Lax',
     ]);
