@@ -6,7 +6,7 @@ require_once __DIR__ . '/../config.php';
 app_start_session();
 $cfg = app_config();
 
-$state = bin2hex(random_bytes(16));
+$state = bin2hex(random_bytes(32));
 $_SESSION['oauth_state'] = $state;
 
 $params = http_build_query([

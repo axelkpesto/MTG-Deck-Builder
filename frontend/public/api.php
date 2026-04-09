@@ -84,9 +84,6 @@ if ($response === false) {
         'details' => [
             'message' => $curlError,
             'errno' => $curlErrno,
-            'url' => $url,
-            'method' => $method,
-            'timeout_seconds' => $timeoutSeconds,
         ],
     ], $isTimeout ? 504 : 502);
 }

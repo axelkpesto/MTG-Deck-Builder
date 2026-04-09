@@ -156,7 +156,7 @@ function decks_http_request(string $method, string $url, array $headers, ?string
     if ($response === false) {
         app_json([
             'error' => 'HTTP request failed',
-            'details' => ['message' => $curlError, 'errno' => $curlErrno, 'url' => $url],
+            'details' => ['message' => $curlError, 'errno' => $curlErrno],
         ], 502);
     }
 
@@ -473,6 +473,9 @@ $method = strtoupper($_SERVER['REQUEST_METHOD'] ?? 'GET');
 
 if ($method === 'GET') {
     $deckId = isset($_GET['id']) ? trim((string)$_GET['id']) : '';
+    if ($deckId !== '' && !preg_match('/^[a-f0-9]{32}$/', $deckId)) {
+        app_json(['error' => 'Invalid deck id'], 400);
+    }
     if ($deckId !== '') {
         $document = decks_get_document($deckId);
         if ($document === null) {
@@ -498,6 +501,9 @@ if ($method === 'DELETE') {
     $deckId = isset($_GET['id']) ? trim((string)$_GET['id']) : '';
     if ($deckId === '') {
         app_json(['error' => 'Missing deck id'], 400);
+    }
+    if (!preg_match('/^[a-f0-9]{32}$/', $deckId)) {
+        app_json(['error' => 'Invalid deck id'], 400);
     }
     $document = decks_get_document($deckId);
     if ($document === null) {

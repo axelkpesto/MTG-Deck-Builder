@@ -43,7 +43,8 @@ if ($tokenDetails === false) {
 
 $tokenJson = json_decode((string)$tokenRaw, true);
 if ($tokenCode < 200 || $tokenCode >= 300 || !is_array($tokenJson) || empty($tokenJson['access_token'])) {
-    app_json(['error' => 'Token exchange failed', 'details' => $tokenDetails], 401);
+    error_log('Token exchange failed: ' . print_r($tokenDetails, true));
+    app_json(['error' => 'Token exchange failed'], 401);
 }
 
 $accessToken = (string)$tokenJson['access_token'];
@@ -60,7 +61,8 @@ curl_close($ch);
 
 $user = json_decode((string)$userRaw, true);
 if ($userCode < 200 || $userCode >= 300 || !is_array($user)) {
-    app_json(['error' => 'User profile fetch failed', 'details' => $userRaw], 401);
+    error_log('User profile fetch failed: ' . print_r($userRaw, true));
+    app_json(['error' => 'User profile fetch failed'], 401);
 }
 
 $_SESSION['user'] = [
