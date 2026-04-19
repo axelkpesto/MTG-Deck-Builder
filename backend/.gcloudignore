@@ -33,7 +33,8 @@ run-local.sh
 
 # Text files (except requirements)
 *.txt
-!requirements.txt
+<!-- !requirements.txt -->
+!deployment.txt
 
 # Unimportant folders
 dataset_builders/
