@@ -6,6 +6,13 @@ require_once __DIR__ . '/../config.php';
 ini_set('max_execution_time', '300');
 set_time_limit(300);
 $cfg = app_config();
+
+// Read the per-user API key before app_require_user() closes the session.
+app_start_session();
+$userApiKey = isset($_SESSION['user_api_key']) && is_string($_SESSION['user_api_key'])
+    ? $_SESSION['user_api_key']
+    : '';
+
 app_require_user();
 $input = app_json_input();
 
@@ -51,7 +58,7 @@ $url = $cfg['mtg_api_base_url'] . $path . ($queryString !== '' ? '?' . $queryStr
 $headers = [
     'Accept: application/json',
     'Content-Type: application/json',
-    'X-API-KEY: ' . $cfg['mtg_global_api_key'],
+    'X-API-KEY: ' . ($userApiKey !== '' ? $userApiKey : $cfg['mtg_global_api_key']),
 ];
 
 $timeoutSeconds = str_starts_with($path, '/generate_deck') ? 300 : 60;

@@ -220,7 +220,7 @@ label,
 
 .controls-grid {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: minmax(0, 1fr);
   gap: 12px;
 }
 
@@ -308,11 +308,11 @@ select,
 }
 
 .deck-toolbar {
+  display: grid;
+  grid-template-columns: 2fr 1fr 1fr;
+  gap: 12px;
+  align-items: end;
   margin-bottom: 16px;
-}
-
-.deck-search {
-  max-width: 360px;
 }
 
 .deck-board {
@@ -328,7 +328,6 @@ select,
   border: 1px solid var(--line);
   border-radius: 16px;
   background: linear-gradient(180deg, rgba(36, 36, 36, 0.9), rgba(22, 22, 22, 0.95));
-  overflow: hidden;
   break-inside: avoid;
   margin-bottom: 28px;
 }
@@ -376,7 +375,6 @@ select,
 
 .column-image-stack {
   position: relative;
-  min-height: 360px;
   padding: 6px 0 20px;
 }
 
@@ -384,17 +382,12 @@ select,
   position: absolute;
   left: 0;
   right: 0;
-  width: 100%;
   padding: 0;
   border: 0;
   border-radius: 16px;
   background: transparent;
   cursor: pointer;
-  overflow: hidden;
-  transform: translateY(0) scale(1);
-  transform-origin: top center;
-  transition: top 0.18s ease, transform 0.18s ease, box-shadow 0.18s ease, opacity 0.18s ease;
-  z-index: calc(10 + var(--stack-index, 0));
+  transition: top 0.32s ease, box-shadow 0.2s ease, opacity 0.2s ease;
 }
 
 .column-stack-card .column-preview-image {
@@ -409,7 +402,6 @@ select,
 }
 
 .column-stack-card.is-active {
-  transform: translateY(-22px) scale(1.03);
   z-index: 80 !important;
   box-shadow: 0 28px 48px rgba(0, 0, 0, 0.6);
 }
@@ -640,13 +632,31 @@ select,
   border-color: var(--danger);
 }
 
+.import-failed {
+  margin-top: 12px;
+  padding: 12px 14px;
+  background: rgba(255, 138, 120, 0.07);
+  border: 1px solid rgba(255, 138, 120, 0.22);
+  border-radius: 10px;
+  color: var(--danger);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.import-failed strong {
+  display: block;
+  margin-bottom: 4px;
+}
+
 @media (max-width: 1180px) {
   .builder-layout {
     grid-template-columns: 1fr;
   }
+}
 
-  .controls-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+@media (max-width: 760px) {
+  .deck-toolbar {
+    grid-template-columns: 1fr;
   }
 }
 
@@ -780,16 +790,8 @@ select,
     flex-wrap: wrap;
   }
 
-  .controls-grid {
-    grid-template-columns: 1fr;
-  }
-
   .deck-board {
     columns: 1;
-  }
-
-  .column-image-stack {
-    min-height: 290px;
   }
 
   .metric-grid {

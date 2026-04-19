@@ -61,24 +61,13 @@ $user = $_SESSION['user'] ?? null;
               <label for="commander">Commander</label>
               <input id="commander" class="input" type="text">
             </div>
-            <div class="group">
-              <label for="filterSelect">Filter</label>
-              <select id="filterSelect" class="input"></select>
-            </div>
-            <div class="group">
-              <label for="sortSelect">Sort</label>
-              <select id="sortSelect" class="input">
-                <option value="category">Group</option>
-                <option value="name">Name</option>
-                <option value="quantity">Quantity</option>
-                <option value="tag">Primary Tag</option>
-              </select>
-            </div>
           </div>
           <div class="action-row">
             <button id="generateBtn" class="button primary" type="button">Generate Deck</button>
             <button id="completeBtn" class="button" type="button">Add Similar Cards</button>
-            <button id="importBtn" class="button" type="button">Import Cards</button>
+            <button id="importToggleBtn" class="button" type="button">Import</button>
+            <button id="exportTxtBtn" class="button ghost" type="button">Export TXT</button>
+            <button id="exportCsvBtn" class="button ghost" type="button">Export CSV</button>
             <div class="deck-badge"><span id="cardCount">0 cards</span></div>
           </div>
           <div class="status-line">
@@ -86,16 +75,23 @@ $user = $_SESSION['user'] ?? null;
           </div>
         </section>
 
-        <section class="panel import-panel">
+        <section id="importPanel" class="panel import-panel" hidden>
           <div class="panel-heading">
-            <div>
-              <strong>Quick Import</strong>
-            </div>
+            <div><strong>Import Cards</strong></div>
+            <button id="importCloseBtn" class="button ghost" type="button">Close</button>
           </div>
           <div class="group">
-            <label for="importCards">Import Cards</label>
-            <textarea id="importCards" class="textarea"></textarea>
+            <label for="importFile">Upload a text file (.txt)</label>
+            <input id="importFile" class="input" type="file" accept=".txt,.csv">
           </div>
+          <div class="group">
+            <label for="importCards">Or paste a deck list below</label>
+            <textarea id="importCards" class="textarea" placeholder="1 Sol Ring&#10;4x Lightning Bolt&#10;..."></textarea>
+          </div>
+          <div class="action-row">
+            <button id="importBtn" class="button primary" type="button">Import Cards</button>
+          </div>
+          <div id="importFailed" class="import-failed" hidden></div>
         </section>
 
         <section class="panel deck-panel">
@@ -108,6 +104,19 @@ $user = $_SESSION['user'] ?? null;
             <div class="group deck-search">
               <label for="searchInput">Search Deck</label>
               <input id="searchInput" class="input" type="text">
+            </div>
+            <div class="group">
+              <label for="filterSelect">Filter</label>
+              <select id="filterSelect" class="input"></select>
+            </div>
+            <div class="group">
+              <label for="sortSelect">Sort</label>
+              <select id="sortSelect" class="input">
+                <option value="category">Group</option>
+                <option value="name">Name</option>
+                <option value="quantity">Quantity</option>
+                <option value="tag">Primary Tag</option>
+              </select>
             </div>
           </div>
           <div id="deckBoard" class="deck-board"></div>

@@ -6,6 +6,9 @@
   const appShell = document.getElementById("appShell");
   if (!loginShell || !appShell) return;
 
+  const CARD_PEEK = 36;
+  const CARD_FULL = 340;
+
   const CATEGORY_ORDER = [
     "Commander",
     "Creature",
@@ -54,8 +57,15 @@
     commander: document.getElementById("commander"),
     generateBtn: document.getElementById("generateBtn"),
     completeBtn: document.getElementById("completeBtn"),
+    importToggleBtn: document.getElementById("importToggleBtn"),
+    importCloseBtn: document.getElementById("importCloseBtn"),
+    importPanel: document.getElementById("importPanel"),
     importCards: document.getElementById("importCards"),
+    importFile: document.getElementById("importFile"),
+    importFailed: document.getElementById("importFailed"),
     importBtn: document.getElementById("importBtn"),
+    exportTxtBtn: document.getElementById("exportTxtBtn"),
+    exportCsvBtn: document.getElementById("exportCsvBtn"),
     saveBtn: document.getElementById("saveBtn"),
     searchInput: document.getElementById("searchInput"),
     sortSelect: document.getElementById("sortSelect"),
@@ -108,7 +118,7 @@
     if (typeof text === "string") {
       setStatus(text, value ? "busy" : "");
     }
-    [els.generateBtn, els.completeBtn, els.importBtn, els.saveBtn].forEach(
+    [els.generateBtn, els.completeBtn, els.importBtn, els.saveBtn, els.exportTxtBtn, els.exportCsvBtn].forEach(
       (btn) => {
         if (btn) btn.disabled = value;
       },
@@ -448,7 +458,6 @@
       renderSummaryMetric("Basics", lands.basic_count || 0),
     );
 
-    // Cost bar: segmented by color
     if (els.costBar) {
       els.costBar.innerHTML = "";
       const totalPct = ["W", "U", "B", "R", "G"].reduce(
@@ -474,7 +483,6 @@
       }
     }
 
-    // Production bar: segmented by basic land color
     if (els.productionBar) {
       els.productionBar.innerHTML = "";
       if (totalProduction > 0) {
@@ -709,16 +717,27 @@
     });
     cardEl.appendChild(removeBtn);
 
-    cardEl.addEventListener("mouseenter", () =>
-      cardEl.classList.add("is-active"),
-    );
-    cardEl.addEventListener("mouseleave", () =>
-      cardEl.classList.remove("is-active"),
-    );
-    cardEl.addEventListener("focusin", () => cardEl.classList.add("is-active"));
-    cardEl.addEventListener("focusout", () =>
-      cardEl.classList.remove("is-active"),
-    );
+    function activateStackCard() {
+      cardEl.classList.add("is-active");
+      const siblings = Array.from(cardEl.parentNode.children);
+      const myIndex = siblings.indexOf(cardEl);
+      for (let j = myIndex + 1; j < siblings.length; j++) {
+        siblings[j].style.top = `${j * CARD_PEEK + (CARD_FULL - CARD_PEEK)}px`;
+      }
+    }
+    function deactivateStackCard() {
+      cardEl.classList.remove("is-active");
+      const siblings = Array.from(cardEl.parentNode.children);
+      const myIndex = siblings.indexOf(cardEl);
+      for (let j = myIndex + 1; j < siblings.length; j++) {
+        siblings[j].style.top = `${j * CARD_PEEK}px`;
+      }
+    }
+
+    cardEl.addEventListener("mouseenter", activateStackCard);
+    cardEl.addEventListener("mouseleave", deactivateStackCard);
+    cardEl.addEventListener("focusin", activateStackCard);
+    cardEl.addEventListener("focusout", deactivateStackCard);
     cardEl.addEventListener("click", () => {
       loadCardMeta(card.name).then((meta) => openCardModal(card, meta));
     });
@@ -777,17 +796,14 @@
 
       const imageStack = document.createElement("div");
       imageStack.className = "column-image-stack";
-      const cardNodes = sortedCards.map((card, index) =>
-        createStackCard(card, index),
-      );
-      cardNodes.forEach((node) => imageStack.appendChild(node));
-
-      const PEEK = 36; // px visible per card
-      cardNodes.forEach((node, index) => {
-        node.style.top = `${index * PEEK}px`;
-        node.style.zIndex = String(10 + index);
+      imageStack.style.height = `${(sortedCards.length - 1) * CARD_PEEK + CARD_FULL}px`;
+      const cardNodes = sortedCards.map((card, index) => {
+        const node = createStackCard(card, index);
+        node.style.top = `${index * CARD_PEEK}px`;
+        node.style.zIndex = String(index + 1);
+        return node;
       });
-      imageStack.style.minHeight = `${(sortedCards.length - 1) * PEEK + 340}px`;
+      cardNodes.forEach((node) => imageStack.appendChild(node));
 
       column.appendChild(header);
       column.appendChild(imageStack);
@@ -859,9 +875,9 @@
       tagData.predicted_scores || tagData.scores,
     );
     const resolvedName =
-      typeof meta.card_name === "string" && meta.card_name.trim()
-        ? meta.card_name.trim()
-        : item.name;
+      (typeof meta.Name === "string" && meta.Name.trim()) ||
+      (typeof meta.card_name === "string" && meta.card_name.trim()) ||
+      item.name;
     const normalizedMeta = normalizeMeta(
       resolvedName,
       meta,
@@ -1002,10 +1018,10 @@
         method: "POST",
         body: { id: commander },
       });
-      const deckCounts = Array.isArray(data) ? data[0] : data;
-      if (!deckCounts || typeof deckCounts !== "object") {
+      if (!Array.isArray(data) || !data[0] || typeof data[0] !== "object") {
         throw new Error("Unexpected generate_deck response format");
       }
+      const deckCounts = data[0];
 
       state.currentDeckId = "";
       state.cards = [
@@ -1027,7 +1043,29 @@
       });
 
       const enriched = await enrichCards(generatedCards);
-      enriched.cards.forEach((card) => {
+
+      if (!state.metaCache[commander]) {
+        await hydrateMetaForNames([commander]);
+      }
+      const commanderMeta = state.metaCache[commander];
+      const commanderColorRaw = parseListString(
+        commanderMeta?.raw?.["Color Identity"] || [],
+      );
+      const commanderColors = new Set(commanderColorRaw.map((c) => c.toUpperCase()));
+
+      const colorFiltered =
+        commanderMeta?.raw?.["Color Identity"] !== undefined
+          ? enriched.cards.filter((card) => {
+              const meta = state.metaCache[card.name];
+              if (!meta?.raw?.["Color Identity"]) return true;
+              const cardColors = parseListString(meta.raw["Color Identity"])
+                .map((c) => c.toUpperCase())
+                .filter((c) => c !== "C");
+              return cardColors.every((c) => commanderColors.has(c));
+            })
+          : enriched.cards;
+
+      colorFiltered.forEach((card) => {
         state.cards.push({
           id: uid(),
           name: card.name,
@@ -1107,12 +1145,21 @@
   }
 
   async function importCards() {
-    const lines = els.importCards.value.split(/\r?\n/);
+    let text = "";
+    if (els.importFile && els.importFile.files && els.importFile.files[0]) {
+      text = await els.importFile.files[0].text();
+    } else {
+      text = els.importCards ? els.importCards.value : "";
+    }
+
+    const lines = text.split(/\r?\n/);
     const parsed = lines.map(parseImportLine).filter(Boolean);
     if (parsed.length === 0) {
       setStatus("No cards to import.", "error");
       return;
     }
+
+    if (els.importFailed) els.importFailed.hidden = true;
 
     setBusy(true, "Validating cards...");
     try {
@@ -1131,20 +1178,78 @@
       if (validCards.length > 0) {
         mergeCards(validCards);
         ensureCommanderCardListed();
-        els.importCards.value = "";
+        if (els.importCards) els.importCards.value = "";
+        if (els.importFile) els.importFile.value = "";
         renderCategoryFilter();
         renderDeckBoard();
         await runAnalysis({ showBusy: false });
       }
 
       if (invalidNames.length > 0) {
-        setStatus(`Skipped invalid cards: ${invalidNames.join(", ")}`, "error");
+        setStatus(
+          `Imported ${validCards.length} card(s). ${invalidNames.length} not found.`,
+          validCards.length > 0 ? "success" : "error",
+        );
+        if (els.importFailed) {
+          els.importFailed.hidden = false;
+          els.importFailed.innerHTML =
+            `<strong>Cards not found (${invalidNames.length}):</strong>` +
+            invalidNames.map((n) => `<div>${n}</div>`).join("");
+        }
       } else {
-        setStatus(`Imported ${validCards.length} cards.`, "success");
+        setStatus(`Imported ${validCards.length} card(s).`, "success");
+        if (els.importFailed) els.importFailed.hidden = true;
       }
     } finally {
       setBusy(false);
     }
+  }
+
+  function downloadFile(content, filename, mimeType) {
+    const blob = new Blob([content], { type: mimeType });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }
+
+  function exportDeckTxt() {
+    if (state.cards.length === 0) {
+      setStatus("No cards to export.", "error");
+      return;
+    }
+    const commander = getCommander();
+    const lines = [];
+    if (commander) lines.push(`1 x ${commander}`);
+    state.cards
+      .filter((c) => c.name.toLowerCase() !== commander.toLowerCase())
+      .sort((a, b) => a.name.localeCompare(b.name))
+      .forEach((card) => lines.push(`${card.quantity} x ${card.name}`));
+    const title = getDeckTitle().replace(/[^\w\s-]/g, "").trim() || "deck";
+    downloadFile(lines.join("\n"), `${title}.txt`, "text/plain");
+  }
+
+  function exportDeckCsv() {
+    if (state.cards.length === 0) {
+      setStatus("No cards to export.", "error");
+      return;
+    }
+    const commander = getCommander();
+    const esc = (v) => `"${String(v).replace(/"/g, '""')}"`;
+    const rows = [["Quantity", "Card Name"].map(esc).join(",")];
+    if (commander) rows.push([esc("1"), esc(commander)].join(","));
+    state.cards
+      .filter((c) => c.name.toLowerCase() !== commander.toLowerCase())
+      .sort((a, b) => a.name.localeCompare(b.name))
+      .forEach((card) =>
+        rows.push([esc(String(card.quantity)), esc(card.name)].join(",")),
+      );
+    const title = getDeckTitle().replace(/[^\w\s-]/g, "").trim() || "deck";
+    downloadFile(rows.join("\n"), `${title}.csv`, "text/csv");
   }
 
   function buildPersistedDeck() {
@@ -1403,17 +1508,14 @@
     const raw = meta.raw || {};
     const imageUrl = imageUrlFromMeta(meta);
 
-    // Image
     els.cardModalImage.src = imageUrl || "";
     els.cardModalImage.alt = card.name;
 
-    // Name + CMC
     els.cardModalName.textContent = meta.name || card.name;
     const cmc = raw["Mana Cost"] ?? raw.mana_cost ?? "";
     els.cardModalCmc.textContent = cmc !== "" ? `CMC ${cmc}` : "";
     els.cardModalCmc.hidden = cmc === "";
 
-    // Type line
     const supertypes = parseListString(raw.Supertypes || raw.supertypes || []);
     const types = parseListString(raw.Types || raw.types || []);
     const subtypes = parseListString(raw.Subtypes || raw.subtypes || []);
@@ -1425,7 +1527,6 @@
       .join(" ");
     els.cardModalTypeline.textContent = typeStr || "—";
 
-    // Badges: color identity + rarity
     els.cardModalBadges.innerHTML = "";
     const colors = parseListString(
       raw["Color Identity"] || raw.color_identity || [],
@@ -1451,13 +1552,11 @@
       els.cardModalBadges.appendChild(rb);
     }
 
-    // Oracle text — loading state while we fetch from Scryfall
     els.cardModalOracle.textContent = "Loading card text…";
     els.cardModalOracle.classList.add("is-loading");
     els.cardModalFlavor.textContent = "";
     els.cardModalPT.textContent = "";
 
-    // Remove handler
     els.cardModalRemove.onclick = () => {
       removeCard(card);
       els.cardModal.close();
@@ -1465,7 +1564,6 @@
 
     els.cardModal.showModal();
 
-    // Fetch Scryfall data for oracle text + P/T
     if (meta.cardId) {
       fetchScryfallCard(meta.cardId).then((sf) => {
         els.cardModalOracle.classList.remove("is-loading");
@@ -1498,8 +1596,22 @@
   function bindBuilderEvents() {
     els.generateBtn.addEventListener("click", generateDeck);
     els.completeBtn.addEventListener("click", completeDeck);
-    els.importBtn.addEventListener("click", importCards);
     els.saveBtn.addEventListener("click", saveDeck);
+    els.importBtn.addEventListener("click", importCards);
+    els.exportTxtBtn.addEventListener("click", exportDeckTxt);
+    els.exportCsvBtn.addEventListener("click", exportDeckCsv);
+
+    // Import panel toggle
+    if (els.importToggleBtn && els.importPanel) {
+      els.importToggleBtn.addEventListener("click", () => {
+        els.importPanel.hidden = !els.importPanel.hidden;
+      });
+    }
+    if (els.importCloseBtn && els.importPanel) {
+      els.importCloseBtn.addEventListener("click", () => {
+        els.importPanel.hidden = true;
+      });
+    }
 
     els.commander.addEventListener("change", () => {
       state.commander = els.commander.value.trim();
