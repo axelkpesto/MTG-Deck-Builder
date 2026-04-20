@@ -1,3 +1,4 @@
+"""Dataclass configuration types for deck generation paths, hyperparameters, and training."""
 from dataclasses import dataclass, field
 from typing import Tuple
 from backend.config import CONFIG
@@ -5,6 +6,7 @@ from backend.config import CONFIG
 
 @dataclass(frozen=True)
 class TagPenalty:
+    """Per-tag soft/hard penalty configuration for deck construction constraints."""
     tag: str
     min_target: int
     max_target: int
@@ -15,6 +17,7 @@ class TagPenalty:
 
 @dataclass(frozen=True)
 class DeckGenPaths:
+    """File paths for all artifacts required to load a DeckGenBundle."""
     nodes_pt: str = CONFIG.datasets["GRAPH_NODES_DATA_PATH"]
     edges_pt: str = CONFIG.datasets["GRAPH_EDGES_DATA_PATH"]
     vectors_pt: str = CONFIG.datasets["VECTOR_DATABASE_PATH"]
@@ -27,6 +30,7 @@ class DeckGenPaths:
 
 @dataclass(frozen=True)
 class GenConfig:
+    """Hyperparameters controlling deck generation sampling and constraint enforcement."""
     deck_size: int = 100
     temperature: float = 0.85
     top_k: int = 256
@@ -96,6 +100,8 @@ class GenConfig:
 
 @dataclass(frozen=True)
 class DeckTrainConfig:
+    """Hyperparameters for training the CommanderDeckGNN model."""
+
     seed: int = 7
     epochs: int = 5
     steps_per_epoch: int = 3000

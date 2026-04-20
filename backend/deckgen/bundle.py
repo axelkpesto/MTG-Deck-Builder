@@ -1,3 +1,4 @@
+"""Bundles model, assets, and config into a single loadable inference object."""
 import os
 from typing import Dict, Optional, Tuple
 
@@ -9,7 +10,9 @@ from backend.deckgen.generator import CommanderCache, build_commander_cache, gen
 from backend.deckgen.model import CommanderDeckGNN
 from backend.vector_database import VectorDatabase
 
+
 class DeckGenBundle:
+    """Ready-to-use bundle of trained model, graph assets, and generation config."""
 
     def __init__(self, model: CommanderDeckGNN, assets: DeckGenAssets, gen: GenConfig, device: torch.device, node_embeddings: Optional[torch.Tensor] = None) -> None:
         """Store the model, assets, and generation config as a ready-to-use bundle.

@@ -1,3 +1,4 @@
+"""MLP-based multi-label tag classifier for MTG card embeddings."""
 import argparse
 import json
 import os
@@ -17,6 +18,8 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 @dataclass(frozen=True)
 class TrainConfig:
+    """Hyperparameters for training the tagging MLP."""
+
     epochs: int = 20
     lr: float = 1e-3
     use_amp: bool = True
@@ -24,6 +27,8 @@ class TrainConfig:
 
 @dataclass(frozen=True)
 class EvalConfig:
+    """Hyperparameters for evaluating the tagging MLP."""
+
     threshold: float = 0.5
     batch_size: int = 2048
 
@@ -36,7 +41,7 @@ def build_dataset():
     Returns:
         DataFrame with columns 'name' (str), 'vector' (np.ndarray), and 'tags' (list[str]).
     """
-    import pandas as pd
+    import pandas as pd  # pylint: disable=import-outside-toplevel
     vd = VectorDatabase(CardEncoder(), CardDecoder())
     vd.load(CONFIG.datasets["VECTOR_DATABASE_PATH"])
 
@@ -68,8 +73,8 @@ def prepare_dataset(df, test_size: float = 0.2, random_state: int = 42):
         float32 numpy arrays, y arrays are binarized float32 labels, mlb is the fitted
         MultiLabelBinarizer, and names_test is a list of card names in the test set.
     """
-    from sklearn.model_selection import train_test_split
-    from sklearn.preprocessing import MultiLabelBinarizer
+    from sklearn.model_selection import train_test_split  # pylint: disable=import-outside-toplevel
+    from sklearn.preprocessing import MultiLabelBinarizer  # pylint: disable=import-outside-toplevel
     feature_series = df["vector"]
     y: list[list[str]] = (
         df["tags"].apply(lambda t: t if isinstance(t, list) else []).tolist()
@@ -95,6 +100,8 @@ def prepare_dataset(df, test_size: float = 0.2, random_state: int = 42):
     return x_train, x_test, y_train, y_test, mlb, names_test
 
 class VectorsDataset(Dataset):
+    """PyTorch Dataset wrapping card embedding and label numpy arrays."""
+
     def __init__(self, features: np.ndarray, y: np.ndarray):
         """Wrap numpy feature and label arrays as a PyTorch Dataset.
 
@@ -131,6 +138,8 @@ class VectorsDataset(Dataset):
         return self.features[idx], self.y[idx]
 
 class MLP(nn.Module):
+    """Two-hidden-layer MLP for multi-label card tag classification."""
+
     def __init__(self, input_dim: int, output_dim: int, hidden: int = 128):
         """Build a two-hidden-layer MLP for multi-label tag classification.
 
@@ -272,7 +281,7 @@ def evaluate(model: nn.Module, x_test: np.ndarray, y_test: np.ndarray, class_nam
     Returns:
         None
     """
-    from sklearn.metrics import (
+    from sklearn.metrics import (  # pylint: disable=import-outside-toplevel
         accuracy_score,
         classification_report,
         f1_score,

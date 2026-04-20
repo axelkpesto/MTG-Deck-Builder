@@ -1,3 +1,4 @@
+"""Pre-loaded graph tensors, metadata, and deck stats for deck generation."""
 import json
 import os
 from collections import defaultdict
@@ -6,7 +7,7 @@ from typing import Dict, List, Optional
 import torch
 from torch_geometric.data import Data
 
-from backend.card_data import CardDecoder, SimpleDeck
+from backend.card_data import CardDecoder, CardFields, SimpleDeck
 from backend.vector_database import VectorDatabase
 
 from .config import DeckGenPaths, GenConfig
@@ -15,6 +16,7 @@ decoder = CardDecoder()
 
 
 class DeckGenAssets:
+    """Container for pre-computed graph tensors and generation metadata."""
 
     def __init__(self, node_names: List[str], node_to_index: Dict[str, int], graph: Data, is_land_node: torch.Tensor, color_identity_mask: torch.Tensor, mana_value_by_node: torch.Tensor, tag_map: Dict[str, List[str]], neighbors_by_node: List[torch.Tensor], commander_indices: List[int], by_commander_stats: Dict[str, List[dict]], global_stats: List[dict]) -> None:
         """Store pre-computed graph tensors and generation metadata.
@@ -70,7 +72,7 @@ def build_node_features(vd: VectorDatabase, node_names: List[str]) -> torch.Tens
     return x
 
 
-def collect_deck_stats(decks: List[SimpleDeck], node_to_index: Dict[str, int], tag_map: Dict[str, List[str]], vd: VectorDatabase, is_land_node: Optional[torch.Tensor] = None, mana_value_by_node: Optional[torch.Tensor] = None) -> tuple[Dict[str, List[dict]], List[dict], List[int]]:
+def collect_deck_stats(decks: List[SimpleDeck], node_to_index: Dict[str, int], tag_map: Dict[str, List[str]], vd: VectorDatabase, is_land_node: Optional[torch.Tensor] = None, mana_value_by_node: Optional[torch.Tensor] = None) -> tuple[Dict[str, List[dict]], List[dict], List[int]]:  # pylint: disable=unused-argument
     """Aggregate deck stats globally and per commander using O(1) graph lookups.
 
     Args:
@@ -84,7 +86,6 @@ def collect_deck_stats(decks: List[SimpleDeck], node_to_index: Dict[str, int], t
     Returns:
         A tuple of (by_commander_stats, global_stats, dedup_commander_indices).
     """
-    from backend.card_data import CardFields
     basic_set_lower = {str(x).strip().lower() for x in CardFields.basic_lands()}
 
     # Transfer tensors to CPU numpy once — avoids 1M GPU-CPU syncs inside the loop.

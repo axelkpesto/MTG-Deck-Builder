@@ -1,3 +1,4 @@
+"""Decodes fixed-length card feature vectors into human-readable representations."""
 from typing import Dict, List
 
 import numpy as np
@@ -5,7 +6,9 @@ import torch
 import torch.nn.functional as F
 from backend.card_data.card_fields import CardFields
 
+
 class CardDecoder:
+    """Decodes card feature vectors into human-readable field dictionaries."""
 
     def __init__(self, embed_dim: int = 686):
         """Initialize field maps and slice definitions for encoded vectors.

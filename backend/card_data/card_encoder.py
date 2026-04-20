@@ -1,3 +1,4 @@
+"""Encodes Card objects into fixed-length numeric feature vectors."""
 from typing import Optional, Tuple
 
 import numpy as np
@@ -5,7 +6,9 @@ import numpy as np
 from backend.card_data.card import Card
 from backend.card_data.card_fields import CardFields
 
+
 class CardEncoder:
+    """Encodes MTG card metadata and text into flat numpy feature vectors."""
 
     def __init__(self, embed_model_name: Optional[str] ="all-MiniLM-L6-v2"):
         """Initialize encoder metadata and optionally load a text embedding model.
@@ -24,7 +27,7 @@ class CardEncoder:
         self.color_identities = CardFields.color_identities()
         self.tags = CardFields.card_tags()
         if embed_model_name:
-            from sentence_transformers import SentenceTransformer
+            from sentence_transformers import SentenceTransformer  # pylint: disable=import-outside-toplevel
             self.embed_model = SentenceTransformer(embed_model_name)
 
     def encode(self, crd: Card) -> Tuple[str, np.ndarray]:

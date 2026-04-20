@@ -1,10 +1,8 @@
 """Build graph node/edge tensors from deck, combo, and tag datasets."""
 
-import sys
 import json
 import math
 import heapq
-from pathlib import Path
 from dataclasses import dataclass
 from collections import Counter, defaultdict
 from itertools import combinations

@@ -1,8 +1,10 @@
+"""Flask server exposing vector database and deck generation endpoints."""
 import json
 import logging
 import os
 import threading
 import time
+import types
 from typing import Any
 
 import numpy as np
@@ -42,8 +44,7 @@ vd.load(CONFIG.datasets["VECTOR_DATABASE_PATH"])
 with open(CONFIG.datasets["TAGS_DATASET_PATH"], "r", encoding="utf-8") as f:
     tag_dataset = json.load(f)
 
-gen: DeckGenBundle | None = None
-_gen_state: str = "loading"  # "loading" | "ready" | "failed"
+_deckgen = types.SimpleNamespace(bundle=None, state="loading")
 
 
 def _warmup_node_embeddings(bundle: DeckGenBundle) -> None:
@@ -86,16 +87,15 @@ def _load_deckgen() -> None:
     Returns:
         None
     """
-    global gen, _gen_state
     logger.info("DeckGenBundle load started (device=%s)", device)
     try:
         bundle = DeckGenBundle.load(paths=DeckGenPaths(), device=str(device), vector_db=vd)
-        gen = bundle
-        _gen_state = "ready"
+        _deckgen.bundle = bundle
+        _deckgen.state = "ready"
         logger.info("DeckGenBundle loaded.")
         _warmup_node_embeddings(bundle)
-    except Exception as e:
-        _gen_state = "failed"
+    except (RuntimeError, OSError, ValueError, KeyError, TypeError) as e:
+        _deckgen.state = "failed"
         logger.exception("DeckGenBundle failed to load: %s", e)
 
 
@@ -548,8 +548,8 @@ def health():
         "model_loaded": model is not None,
         "vector_db_loaded": vd is not None and len(vd) > 0,
         "vd_size": len(vd) if vd is not None else 0,
-        "deckgen_loaded": gen is not None,
-        "deckgen_state": _gen_state,
+        "deckgen_loaded": _deckgen.bundle is not None,
+        "deckgen_state": _deckgen.state,
     })
 
 @app.route('/get_vector', methods=['POST'])
@@ -816,8 +816,8 @@ def generate_deck():
     Returns:
         JSON object mapping card names to quantities, plus generation stats.
     """
-    if gen is None:
-        if _gen_state == "failed":
+    if _deckgen.bundle is None:
+        if _deckgen.state == "failed":
             return error("deck generation model failed to load", 503)
         return error("deck generation model is still loading, please retry shortly", 503)
 
@@ -832,7 +832,7 @@ def generate_deck():
     except KeyError:
         return error("id not found", 400)
 
-    return jsonify(gen.generate(card))
+    return jsonify(_deckgen.bundle.generate(card))
 
 @app.route('/analyze_deck', methods=['POST'])
 @limiter.limit(set_limit)

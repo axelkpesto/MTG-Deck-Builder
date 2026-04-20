@@ -1,3 +1,4 @@
+"""Autoregressive Commander deck generator using a trained GNN model."""
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Tuple
 from collections import defaultdict
@@ -285,6 +286,7 @@ def build_commander_cache(assets: DeckGenAssets, commander_name: str, commander_
 
 
 class DeckState:
+    """Mutable state accumulator for a single deck construction run."""
 
     def __init__(self, deck_indices: List[int], nonbasic_already_picked: torch.Tensor) -> None:
         """Initialize mutable generation state for one deck construction run.
@@ -311,6 +313,7 @@ class DeckState:
 
 
 class DeckGenerator:
+    """Autoregressive sampler that builds a deck card-by-card using GNN scores."""
 
     def __init__(self, model: CommanderDeckGNN, assets: DeckGenAssets, commander_name: str, gen: GenConfig, allow_duplicates: bool, node_embeddings: Optional[torch.Tensor] = None, commander_cache: Optional[CommanderCache] = None):
         """Prepare model state, targets, and pre-computed masks for generation.
