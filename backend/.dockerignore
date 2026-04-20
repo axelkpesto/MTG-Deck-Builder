@@ -44,3 +44,4 @@ tests/
 workers/
 legacy/
 frontend/
+data/

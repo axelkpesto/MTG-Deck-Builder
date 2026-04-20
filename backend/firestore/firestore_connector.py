@@ -154,8 +154,9 @@ def authenticate_api_key(raw_key: str) -> dict | None:
 
         if expires_at < now:
             return None
-        if not validate_firebase_api_key(raw_key, data["key_hash"]):
-            return None
+
+    if not validate_firebase_api_key(raw_key, data["key_hash"]):
+        return None
 
     doc_ref.update({"last_used_at": datetime.now(timezone.utc)})
 
