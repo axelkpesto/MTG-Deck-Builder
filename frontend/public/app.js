@@ -762,7 +762,8 @@
     const displayCards = getDisplayCards()
       .slice()
       .sort((a, b) => {
-        const ag = getCardGroup(a), bg = getCardGroup(b);
+        const ag = getCardGroup(a),
+          bg = getCardGroup(b);
         if (ag === "Commander") return -1;
         if (bg === "Commander") return 1;
         return ag.localeCompare(bg) || a.name.localeCompare(b.name);
@@ -784,7 +785,7 @@
       name.type = "button";
       name.textContent = card.name;
       name.addEventListener("click", () =>
-        loadCardMeta(card.name).then((meta) => openCardModal(card, meta))
+        loadCardMeta(card.name).then((meta) => openCardModal(card, meta)),
       );
 
       const tag = document.createElement("span");
@@ -798,13 +799,17 @@
       minusBtn.type = "button";
       minusBtn.className = "deck-list-action-btn";
       minusBtn.textContent = "−";
-      minusBtn.addEventListener("click", () => updateCardQuantity(card, card.quantity - 1));
+      minusBtn.addEventListener("click", () =>
+        updateCardQuantity(card, card.quantity - 1),
+      );
 
       const plusBtn = document.createElement("button");
       plusBtn.type = "button";
       plusBtn.className = "deck-list-action-btn";
       plusBtn.textContent = "+";
-      plusBtn.addEventListener("click", () => updateCardQuantity(card, card.quantity + 1));
+      plusBtn.addEventListener("click", () =>
+        updateCardQuantity(card, card.quantity + 1),
+      );
 
       const removeBtn = document.createElement("button");
       removeBtn.type = "button";
@@ -1117,7 +1122,9 @@
       const commanderColorRaw = parseListString(
         commanderMeta?.raw?.["Color Identity"] || [],
       );
-      const commanderColors = new Set(commanderColorRaw.map((c) => c.toUpperCase()));
+      const commanderColors = new Set(
+        commanderColorRaw.map((c) => c.toUpperCase()),
+      );
 
       const colorFiltered =
         commanderMeta?.raw?.["Color Identity"] !== undefined
@@ -1295,7 +1302,10 @@
       .filter((c) => c.name.toLowerCase() !== commander.toLowerCase())
       .sort((a, b) => a.name.localeCompare(b.name))
       .forEach((card) => lines.push(`${card.quantity} x ${card.name}`));
-    const title = getDeckTitle().replace(/[^\w\s-]/g, "").trim() || "deck";
+    const title =
+      getDeckTitle()
+        .replace(/[^\w\s-]/g, "")
+        .trim() || "deck";
     downloadFile(lines.join("\n"), `${title}.txt`, "text/plain");
   }
 
@@ -1314,7 +1324,10 @@
       .forEach((card) =>
         rows.push([esc(String(card.quantity)), esc(card.name)].join(",")),
       );
-    const title = getDeckTitle().replace(/[^\w\s-]/g, "").trim() || "deck";
+    const title =
+      getDeckTitle()
+        .replace(/[^\w\s-]/g, "")
+        .trim() || "deck";
     downloadFile(rows.join("\n"), `${title}.csv`, "text/csv");
   }
 
@@ -1667,10 +1680,14 @@
 
     // Import modal
     if (els.importToggleBtn && els.importModal) {
-      els.importToggleBtn.addEventListener("click", () => els.importModal.showModal());
+      els.importToggleBtn.addEventListener("click", () =>
+        els.importModal.showModal(),
+      );
     }
     if (els.importCloseBtn && els.importModal) {
-      els.importCloseBtn.addEventListener("click", () => els.importModal.close());
+      els.importCloseBtn.addEventListener("click", () =>
+        els.importModal.close(),
+      );
     }
     if (els.importModal) {
       els.importModal.addEventListener("click", (e) => {
@@ -1680,21 +1697,31 @@
 
     // Export modal
     if (els.downloadBtn && els.exportModal) {
-      els.downloadBtn.addEventListener("click", () => els.exportModal.showModal());
+      els.downloadBtn.addEventListener("click", () =>
+        els.exportModal.showModal(),
+      );
     }
     const closeExportModal = () => els.exportModal && els.exportModal.close();
-    if (els.exportModalClose) els.exportModalClose.addEventListener("click", closeExportModal);
-    if (els.exportCloseFooter) els.exportCloseFooter.addEventListener("click", closeExportModal);
+    if (els.exportModalClose)
+      els.exportModalClose.addEventListener("click", closeExportModal);
+    if (els.exportCloseFooter)
+      els.exportCloseFooter.addEventListener("click", closeExportModal);
     if (els.exportModal) {
       els.exportModal.addEventListener("click", (e) => {
         if (e.target === els.exportModal) els.exportModal.close();
       });
     }
     if (els.exportTxtBtn) {
-      els.exportTxtBtn.addEventListener("click", () => { exportDeckTxt(); closeExportModal(); });
+      els.exportTxtBtn.addEventListener("click", () => {
+        exportDeckTxt();
+        closeExportModal();
+      });
     }
     if (els.exportCsvBtn) {
-      els.exportCsvBtn.addEventListener("click", () => { exportDeckCsv(); closeExportModal(); });
+      els.exportCsvBtn.addEventListener("click", () => {
+        exportDeckCsv();
+        closeExportModal();
+      });
     }
 
     els.commander.addEventListener("change", () => {
