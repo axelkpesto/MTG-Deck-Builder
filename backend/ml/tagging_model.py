@@ -1,25 +1,12 @@
-"""Train and run a multi-label tag predictor from card vectors."""
-
 import argparse
 import json
 import os
 from dataclasses import dataclass
 
 import numpy as np
-import pandas as pd
 import torch
 from torch import nn
 from torch.utils.data import DataLoader, Dataset
-
-from sklearn.metrics import (
-    accuracy_score,
-    classification_report,
-    f1_score,
-    precision_score,
-    recall_score,
-)
-from sklearn.model_selection import train_test_split
-from sklearn.preprocessing import MultiLabelBinarizer
 
 from backend.card_data import CardDecoder, CardEncoder
 from backend.config import CONFIG
@@ -30,8 +17,6 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 @dataclass(frozen=True)
 class TrainConfig:
-    """Training hyperparameters."""
-
     epochs: int = 20
     lr: float = 1e-3
     use_amp: bool = True
@@ -39,13 +24,19 @@ class TrainConfig:
 
 @dataclass(frozen=True)
 class EvalConfig:
-    """Evaluation configuration."""
-
     threshold: float = 0.5
     batch_size: int = 2048
 
-def build_dataset() -> pd.DataFrame:
-    """Build a dataframe of card names, vectors, and tag labels."""
+def build_dataset():
+    """Load card vectors and tag labels from disk and assemble a DataFrame.
+
+    Args:
+        None
+
+    Returns:
+        DataFrame with columns 'name' (str), 'vector' (np.ndarray), and 'tags' (list[str]).
+    """
+    import pandas as pd
     vd = VectorDatabase(CardEncoder(), CardDecoder())
     vd.load(CONFIG.datasets["VECTOR_DATABASE_PATH"])
 
@@ -64,8 +55,21 @@ def build_dataset() -> pd.DataFrame:
         rows.append({"name": name, "vector": vec, "tags": card_lookup.get(name, [])})
     return pd.DataFrame(rows)
 
-def prepare_dataset(df: pd.DataFrame, test_size: float = 0.2, random_state: int = 42):
-    """Split features/labels into train and test tensors."""
+def prepare_dataset(df, test_size: float = 0.2, random_state: int = 42):
+    """Split a card DataFrame into train/test arrays with binarized tag labels.
+
+    Args:
+        df: DataFrame with 'name', 'vector', and 'tags' columns.
+        test_size: Fraction of data to hold out for testing.
+        random_state: Random seed for reproducible splits.
+
+    Returns:
+        Tuple of (x_train, x_test, y_train, y_test, mlb, names_test) where x arrays are
+        float32 numpy arrays, y arrays are binarized float32 labels, mlb is the fitted
+        MultiLabelBinarizer, and names_test is a list of card names in the test set.
+    """
+    from sklearn.model_selection import train_test_split
+    from sklearn.preprocessing import MultiLabelBinarizer
     feature_series = df["vector"]
     y: list[list[str]] = (
         df["tags"].apply(lambda t: t if isinstance(t, list) else []).tolist()
@@ -91,23 +95,53 @@ def prepare_dataset(df: pd.DataFrame, test_size: float = 0.2, random_state: int 
     return x_train, x_test, y_train, y_test, mlb, names_test
 
 class VectorsDataset(Dataset):
-    """Simple tensor-backed dataset for vector/tag pairs."""
-
     def __init__(self, features: np.ndarray, y: np.ndarray):
+        """Wrap numpy feature and label arrays as a PyTorch Dataset.
+
+        Args:
+            features: Float32 numpy array of shape (N, input_dim).
+            y: Float32 numpy array of shape (N, num_classes).
+
+        Returns:
+            None
+        """
         self.features = torch.from_numpy(features)
         self.y = torch.from_numpy(y)
 
     def __len__(self) -> int:
+        """Return the number of samples in the dataset.
+
+        Args:
+            None
+
+        Returns:
+            Number of samples.
+        """
         return self.features.shape[0]
 
     def __getitem__(self, idx: int):
-        """Return one `(features, labels)` sample."""
+        """Return the feature vector and label vector for a single sample.
+
+        Args:
+            idx: Integer index into the dataset.
+
+        Returns:
+            Tuple of (feature_tensor, label_tensor).
+        """
         return self.features[idx], self.y[idx]
 
 class MLP(nn.Module):
-    """Small MLP for multi-label classification."""
-
     def __init__(self, input_dim: int, output_dim: int, hidden: int = 128):
+        """Build a two-hidden-layer MLP for multi-label tag classification.
+
+        Args:
+            input_dim: Dimensionality of the input card embedding.
+            output_dim: Number of tag classes to predict.
+            hidden: Width of both hidden layers.
+
+        Returns:
+            None
+        """
         super().__init__()
         self.net = nn.Sequential(
             nn.Linear(input_dim, hidden),
@@ -118,12 +152,31 @@ class MLP(nn.Module):
         )
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        """Run the MLP forward pass."""
+        """Run a forward pass and return raw logits.
+
+        Args:
+            x: Float tensor of shape (batch, input_dim).
+
+        Returns:
+            Float tensor of shape (batch, output_dim) containing raw logits.
+        """
         return self.net(x)
 
 
 def _run_train_epoch(model: nn.Module, train_loader: DataLoader, criterion: nn.Module, optimizer: torch.optim.Optimizer, use_cuda_amp: bool, scaler: torch.amp.GradScaler | None) -> float:
-    """Run one training epoch and return mean training loss."""
+    """Run one full training epoch and return the average loss.
+
+    Args:
+        model: Model to train.
+        train_loader: DataLoader yielding (features, labels) batches.
+        criterion: Loss function.
+        optimizer: Parameter optimizer.
+        use_cuda_amp: Whether to use CUDA automatic mixed precision.
+        scaler: GradScaler for AMP, or None if AMP is disabled.
+
+    Returns:
+        Mean training loss over the full epoch.
+    """
     model.train()
     running = 0.0
     for xb, yb in train_loader:
@@ -147,7 +200,17 @@ def _run_train_epoch(model: nn.Module, train_loader: DataLoader, criterion: nn.M
 
 
 def _run_val_epoch(model: nn.Module, val_loader: DataLoader, criterion: nn.Module, use_cuda_amp: bool) -> float:
-    """Run one validation epoch and return mean validation loss."""
+    """Run one full validation epoch and return the average loss.
+
+    Args:
+        model: Model to evaluate.
+        val_loader: DataLoader yielding (features, labels) batches.
+        criterion: Loss function.
+        use_cuda_amp: Whether to use CUDA automatic mixed precision.
+
+    Returns:
+        Mean validation loss over the full epoch.
+    """
     model.eval()
     running = 0.0
     with torch.no_grad(), torch.amp.autocast(device_type="cuda", enabled=use_cuda_amp):
@@ -160,7 +223,17 @@ def _run_val_epoch(model: nn.Module, val_loader: DataLoader, criterion: nn.Modul
     return running / len(val_loader.dataset)
 
 def train(model: nn.Module, train_loader: DataLoader, val_loader: DataLoader, train_cfg: TrainConfig = TrainConfig()):
-    """Train the model and print epoch-level losses."""
+    """Train the model for the configured number of epochs, printing loss each epoch.
+
+    Args:
+        model: MLP model to train.
+        train_loader: DataLoader for the training split.
+        val_loader: DataLoader for the validation split.
+        train_cfg: Hyperparameter configuration for training.
+
+    Returns:
+        None
+    """
     model.to(device)
     criterion = nn.BCEWithLogitsLoss()
     optimizer = torch.optim.Adam(model.parameters(), lr=train_cfg.lr)
@@ -187,7 +260,25 @@ def train(model: nn.Module, train_loader: DataLoader, val_loader: DataLoader, tr
 
 @torch.no_grad()
 def evaluate(model: nn.Module, x_test: np.ndarray, y_test: np.ndarray, class_names: list[str], eval_cfg: EvalConfig = EvalConfig()):
-    """Evaluate model predictions and print aggregate metrics."""
+    """Evaluate model on the test set and print per-class and aggregate metrics.
+
+    Args:
+        model: Trained MLP model to evaluate.
+        x_test: Float32 numpy array of test features.
+        y_test: Float32 binary numpy array of ground-truth labels.
+        class_names: Ordered list of tag class names.
+        eval_cfg: Evaluation configuration including threshold and batch size.
+
+    Returns:
+        None
+    """
+    from sklearn.metrics import (
+        accuracy_score,
+        classification_report,
+        f1_score,
+        precision_score,
+        recall_score,
+    )
     model.eval()
     model.to(device)
 
@@ -217,8 +308,18 @@ def evaluate(model: nn.Module, x_test: np.ndarray, y_test: np.ndarray, class_nam
     print("\nPer-class classification report:")
     print(classification_report(y_test, y_pred, target_names=list(class_names), zero_division=0))
 
-def save_model(model: nn.Module, mlb: MultiLabelBinarizer, path: str, model_kwargs: dict):
-    """Persist model state and metadata to disk."""
+def save_model(model: nn.Module, mlb, path: str, model_kwargs: dict):
+    """Serialize a trained model and its metadata to disk.
+
+    Args:
+        model: Trained MLP to save.
+        mlb: Fitted MultiLabelBinarizer whose class list is stored alongside the model.
+        path: File path to write the checkpoint to.
+        model_kwargs: Constructor keyword arguments needed to reconstruct the model.
+
+    Returns:
+        None
+    """
     os.makedirs(os.path.dirname(path), exist_ok=True)
     payload = {
         "state_dict": model.state_dict(),
@@ -229,7 +330,18 @@ def save_model(model: nn.Module, mlb: MultiLabelBinarizer, path: str, model_kwar
     print(f"[saved] {path}")
 
 def predicted_scores_from_probabilities(probs: np.ndarray, class_names: list[str], threshold: float) -> tuple[list[dict[str, float | str]], list[str]]:
-    """Return thresholded tag scores sorted by confidence."""
+    """Filter sigmoid probabilities by threshold and return sorted tag predictions.
+
+    Args:
+        probs: Float numpy array of sigmoid probabilities, one per class.
+        class_names: Ordered list of tag class names aligned with probs.
+        threshold: Minimum probability for a tag to be included in the predicted set.
+
+    Returns:
+        Tuple of (predicted_scores, predicted) where predicted_scores is a list of
+        {'tag': str, 'score': float} dicts sorted descending by score, and predicted
+        is a flat list of tag name strings.
+    """
     pred_idxs = np.where(probs >= threshold)[0]
     predicted_scores = sorted(
         (
@@ -244,7 +356,15 @@ def predicted_scores_from_probabilities(probs: np.ndarray, class_names: list[str
 
 @torch.no_grad()
 def load_model(path: str) -> tuple[nn.Module, list[str]]:
-    """Load a saved model and return it with class names."""
+    """Load a saved MLP checkpoint from disk and return the model and class names.
+
+    Args:
+        path: File path to the saved checkpoint.
+
+    Returns:
+        Tuple of (model, class_names) where model is an MLP in eval mode and
+        class_names is the list of tag strings the model was trained on.
+    """
     payload = torch.load(path, map_location=device)
     kw = payload["model_kwargs"]
     model = MLP(**kw).eval()
@@ -252,7 +372,14 @@ def load_model(path: str) -> tuple[nn.Module, list[str]]:
     return model, payload["class_names"]
 
 def main():
-    """CLI entrypoint for training/evaluating/saving tag model."""
+    """Parse CLI arguments, train or load a tagging model, evaluate it, and optionally save it.
+
+    Args:
+        None
+
+    Returns:
+        None
+    """
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "--load",

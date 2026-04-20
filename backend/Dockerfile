@@ -18,5 +18,7 @@ RUN pip install --no-cache-dir --upgrade pip
 # RUN pip install --no-cache-dir -r backend/requirements.txt
 RUN pip install --no-cache-dir -r backend/deployment.txt
 
-# Timeout is set to 0 to disable the timeouts of the workers to allow Cloud Run to handle instance scaling.
-CMD exec gunicorn --bind :$PORT --workers 1 --threads 8 --timeout 0 backend.api.vector_db_server:app
+COPY startup.sh /startup.sh
+RUN chmod +x /startup.sh
+
+CMD ["/startup.sh"]

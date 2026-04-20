@@ -1,4 +1,3 @@
-"""Flask server exposing vector, tagging, and deck-generation endpoints."""
 import json
 import logging
 import os
@@ -7,7 +6,6 @@ import time
 from typing import Any
 
 import numpy as np
-import requests
 import torch
 from dotenv import load_dotenv
 from flask import Flask, request, jsonify, g
@@ -44,30 +42,66 @@ vd.load(CONFIG.datasets["VECTOR_DATABASE_PATH"])
 with open(CONFIG.datasets["TAGS_DATASET_PATH"], "r", encoding="utf-8") as f:
     tag_dataset = json.load(f)
 
-gen = DeckGenBundle.load(paths=DeckGenPaths(), device=str(device), vector_db=vd)
+gen: DeckGenBundle | None = None
+_gen_state: str = "loading"  # "loading" | "ready" | "failed"
 
-def load_deckgen_assets() -> None:
-    """Warm cached deck-generation tensors without blocking server startup."""
+
+def _warmup_node_embeddings(bundle: DeckGenBundle) -> None:
+    """Pre-compute node embeddings in the background to reduce first-request latency.
+
+    Args:
+        bundle: Loaded DeckGenBundle whose node embeddings will be computed.
+
+    Returns:
+        None
+    """
+    if bundle.node_embeddings is not None:
+        return
+
+    if device.type != "cuda":
+        logger.info("Skipping deck generation warmup on CPU device.")
+        return
+
     warmup_enabled = bool(int(os.environ.get("DECKGEN_WARMUP", "1")))
     if not warmup_enabled:
         logger.info("Deck generation warmup disabled.")
         return
 
-    if device.type == "cuda" and not bool(int(os.environ.get("DECKGEN_WARMUP_ON_CUDA", "0"))):
-        logger.info("Skipping deck generation warmup on CUDA device.")
-        return
-
     try:
-        gen.get_node_embeddings()
+        bundle.get_node_embeddings()
         logger.info("Deck generation embeddings warmed.")
     except torch.OutOfMemoryError as e:
-        if torch.cuda.is_available():
-            torch.cuda.empty_cache()
+        torch.cuda.empty_cache()
         logger.warning("Deck generation warmup skipped after CUDA OOM: %s", e)
     except (RuntimeError, ValueError, OSError) as e:
         logger.warning("Deck generation warmup failed: %s", e)
 
-threading.Thread(target=load_deckgen_assets, daemon=True).start()
+
+def _load_deckgen() -> None:
+    """Load the DeckGenBundle into the global `gen` variable in a background thread.
+
+    Args:
+        None
+
+    Returns:
+        None
+    """
+    global gen, _gen_state
+    logger.info("DeckGenBundle load started (device=%s)", device)
+    try:
+        bundle = DeckGenBundle.load(paths=DeckGenPaths(), device=str(device), vector_db=vd)
+        gen = bundle
+        _gen_state = "ready"
+        logger.info("DeckGenBundle loaded.")
+        _warmup_node_embeddings(bundle)
+    except Exception as e:
+        _gen_state = "failed"
+        logger.exception("DeckGenBundle failed to load: %s", e)
+
+
+threading.Thread(target=_load_deckgen, daemon=True).start()
+
+
 DEFAULT_RATE_LIMIT = "120 per minute"
 
 limiter = Limiter(
@@ -80,20 +114,56 @@ limiter = Limiter(
 auth_enabled = bool(int(os.environ.get("AUTHENTICATE", 1)))
 
 def error(message: str, status: int = 400):
-    """Return a consistent JSON error."""
+    """Return a JSON error response with the given message and HTTP status.
+
+    Args:
+        message: Human-readable error description.
+        status: HTTP status code to return.
+
+    Returns:
+        Flask JSON response tuple (response, status_code).
+    """
     return jsonify({"error": message}), status
 
 def clamp_int(x: int, lo: int, hi: int) -> int:
-    """Clamp an integer to the inclusive range [lo, hi]."""
+    """Clamp an integer to the inclusive range [lo, hi].
+
+    Args:
+        x: Value to clamp.
+        lo: Lower bound.
+        hi: Upper bound.
+
+    Returns:
+        Integer clamped to [lo, hi].
+    """
     return max(lo, min(hi, x))
 
 def clamp_float(x: float, lo: float, hi: float) -> float:
-    """Clamp a float to the inclusive range [lo, hi]."""
+    """Clamp a float to the inclusive range [lo, hi].
+
+    Args:
+        x: Value to clamp.
+        lo: Lower bound.
+        hi: Upper bound.
+
+    Returns:
+        Float clamped to [lo, hi].
+    """
     return max(lo, min(hi, x))
 
 
 def resolve_card_id(v_id: str) -> str:
-    """Resolve a user-supplied card name to a canonical vector id."""
+    """Resolve a raw card name string to a canonical vector database key.
+
+    Args:
+        v_id: Raw card name from the request, possibly mis-capitalized.
+
+    Returns:
+        Canonical card name present in the vector database.
+
+    Raises:
+        KeyError: If no matching card is found after all resolution attempts.
+    """
     raw = v_id.strip()
     if not raw:
         raise KeyError(v_id)
@@ -108,7 +178,17 @@ def resolve_card_id(v_id: str) -> str:
 
 
 def parse_card_list_payload(data: dict[str, Any]) -> list[str]:
-    """Validate and normalize a request body containing card names."""
+    """Extract and validate the 'cards' list from a JSON request payload.
+
+    Args:
+        data: Parsed JSON body from the request.
+
+    Returns:
+        Non-empty list of stripped card name strings.
+
+    Raises:
+        ValueError: If 'cards' is missing, not a list of strings, or empty after stripping.
+    """
     cards = data.get("cards")
     if not isinstance(cards, list) or not all(isinstance(c, str) for c in cards):
         raise ValueError("JSON body must include 'cards': ['Card Name', ...]")
@@ -119,7 +199,18 @@ def parse_card_list_payload(data: dict[str, Any]) -> list[str]:
 
 
 def parse_required_card_id(data: dict[str, Any], field_name: str = "id") -> str:
-    """Validate and normalize a request body containing a single card id/name."""
+    """Extract and validate a required string field from a JSON request payload.
+
+    Args:
+        data: Parsed JSON body from the request.
+        field_name: Key to look up in the payload.
+
+    Returns:
+        Stripped non-empty string value for the field.
+
+    Raises:
+        ValueError: If the field is missing, not a string, or blank after stripping.
+    """
     value = data.get(field_name)
     if not isinstance(value, str) or not value.strip():
         raise ValueError(f"JSON body must include '{field_name}': 'Card Name'")
@@ -127,36 +218,76 @@ def parse_required_card_id(data: dict[str, Any], field_name: str = "id") -> str:
 
 
 def predict_tags_for_card(card_id: str, threshold: float, top_k: int) -> dict[str, Any]:
-    """Predict tags for one canonical card id."""
+    """Look up a card's vector and run tag prediction on it.
+
+    Args:
+        card_id: Canonical card name in the vector database.
+        threshold: Minimum probability to include a tag in predicted output.
+        top_k: Maximum number of top-scoring tags to include in the scores list.
+
+    Returns:
+        Dict with 'predicted', 'predicted_scores', 'scores', and 'threshold' keys.
+    """
     vector = vd.get(card_id)
     vec_np = VectorDatabase.vector_to_numpy(vector)
     result = predict_from_vector(vec_np, threshold, top_k)
     return result
 
 def get_api_key_from_request(req) -> str | None:
-    """Extract API key from bearer token or X-API-KEY header."""
+    """Extract an API key from a request's Authorization or X-API-KEY header.
+
+    Args:
+        req: Flask request object.
+
+    Returns:
+        API key string, or None if no key is present.
+    """
     auth = req.headers.get("Authorization", "")
     if auth.lower().startswith("bearer "):
         return auth.split(" ", 1)[1].strip()
     return req.headers.get("X-API-KEY")
 
 def set_limit() -> str:
-    """Resolve request rate-limit from request context or default."""
+    """Return the rate limit string for the current request's API key tier.
+
+    Args:
+        None
+
+    Returns:
+        Rate limit string in Flask-Limiter format (e.g. '120 per minute').
+    """
     if hasattr(g, "rate_limit") and g.rate_limit:
-        if "/" in g.rate_limit:
-            split = g.rate_limit.split("/")
+        rl = g.rate_limit
+        if rl == "unlimited":
+            return DEFAULT_RATE_LIMIT
+        if "/" in rl:
+            split = rl.split("/")
             return f"{split[0]} per {split[1]}"
-        return g.rate_limit
+        return rl
     return DEFAULT_RATE_LIMIT
 
 @app.before_request
 def _start_timer():
-    """Store request start time for latency logging."""
+    """Record the request start time for latency logging.
+
+    Args:
+        None
+
+    Returns:
+        None
+    """
     g.start_time = time.time()
 
 @app.before_request
 def _authenticate_api_key():
-    """Authenticate API key for protected endpoints."""
+    """Validate the API key on every request that requires authentication.
+
+    Args:
+        None
+
+    Returns:
+        None on success, or a JSON error response on auth failure.
+    """
     if not auth_enabled:
         return None
 
@@ -187,7 +318,14 @@ def _authenticate_api_key():
 
 @app.after_request
 def _log_request(resp):
-    """Log request method/path/status and latency."""
+    """Log method, path, status code, and elapsed time for each completed request.
+
+    Args:
+        resp: Flask response object.
+
+    Returns:
+        The unmodified response object.
+    """
     try:
         dt_ms = (time.time() - getattr(g, "start_time", time.time())) * 1000.0
         logger.info("%s %s -> %s (%.1fms)", request.method, request.path, resp.status_code, dt_ms)
@@ -197,18 +335,39 @@ def _log_request(resp):
 
 @app.errorhandler(404)
 def _not_found(_):
-    """Return a standardized 404 response."""
+    """Handle 404 Not Found errors.
+
+    Args:
+        _: Unused exception argument.
+
+    Returns:
+        JSON error response with status 404.
+    """
     return error("not found", 404)
 
 @app.errorhandler(500)
 def _server_error(e):
-    """Return a standardized 500 response and log exception."""
+    """Handle unhandled 500 Internal Server Errors.
+
+    Args:
+        e: The exception that triggered the error handler.
+
+    Returns:
+        JSON error response with status 500.
+    """
     logger.exception("Unhandled server error: %s", e)
     return error("internal server error", 500)
 
 @app.route('/', methods=['GET', 'POST'])
 def home():
-    """Render a lightweight HTML landing page."""
+    """Render the server landing page.
+
+    Args:
+        None
+
+    Returns:
+        HTML string with links to /help and /examples.
+    """
     return "<h1>Vector Database Server</h1>" \
     "<p>This server provides access to querying the MTG card vector database.</p>" \
     "<p>For a list of available endpoints, visit <a href='/help'>/help</a></p>" \
@@ -216,7 +375,14 @@ def home():
 
 @app.route('/help', methods=['GET'])
 def help_route():
-    """Return endpoint documentation for the API."""
+    """Return a JSON description of all available API endpoints.
+
+    Args:
+        None
+
+    Returns:
+        JSON object mapping endpoint paths to method, body, and description.
+    """
     return jsonify({
         "endpoints": {
             "/status": {
@@ -293,7 +459,14 @@ def help_route():
 
 @app.route('/examples', methods=['GET'])
 def examples():
-    """Return example requests for the API."""
+    """Return example request bodies for all API endpoints.
+
+    Args:
+        None
+
+    Returns:
+        JSON object mapping endpoint paths to example method and body.
+    """
     return jsonify({
         "examples": {
             "/status": {
@@ -361,21 +534,35 @@ def examples():
 
 @app.route('/status', methods=['POST'])
 def health():
-    """Return service health status."""
+    """Return the health status of all loaded server components.
+
+    Args:
+        None
+
+    Returns:
+        JSON object with status flags for the tagging model, vector database, and deck generator.
+    """
     healthy = (model is not None) and (vd is not None) and len(vd) > 0
     return jsonify({
         "status": "healthy" if healthy else "error",
         "model_loaded": model is not None,
         "vector_db_loaded": vd is not None and len(vd) > 0,
         "vd_size": len(vd) if vd is not None else 0,
+        "deckgen_loaded": gen is not None,
+        "deckgen_state": _gen_state,
     })
 
-# Example Request:
-# Invoke-RestMethod -Method Post -Uri "http://127.0.0.1:5000/get_vector" -ContentType "application/json" -Body '{"id":"Shunt"}'
 @app.route('/get_vector', methods=['POST'])
 @limiter.limit(set_limit)
 def get_vector():
-    """Get a vector by card id/name."""
+    """Return the raw embedding vector for a card by name.
+
+    Args:
+        None
+
+    Returns:
+        JSON object with 'id' and 'vector' (list of floats).
+    """
     data = request.get_json(silent=True) or {}
     try:
         v_id = parse_required_card_id(data)
@@ -394,12 +581,17 @@ def get_vector():
         }
     )
 
-# Example Request:
-# Invoke-RestMethod -Method Post -Uri "http://127.0.0.1:5000/get_vector_description" -ContentType "application/json" -Body '{"id":"Shunt"}'
 @app.route('/get_vector_description', methods=['POST'])
 @limiter.limit(set_limit)
 def get_vector_description():
-    """Get decoded vector metadata by card id/name."""
+    """Return the human-readable description dict for a card by name.
+
+    Args:
+        None
+
+    Returns:
+        JSON object with card metadata from the vector database.
+    """
     data = request.get_json(silent=True) or {}
     try:
         v_id = parse_required_card_id(data)
@@ -417,7 +609,14 @@ def get_vector_description():
 @app.route('/get_vector_descriptions', methods=['POST'])
 @limiter.limit(set_limit)
 def get_vector_descriptions():
-    """Get decoded vector metadata for a list of card names."""
+    """Return description dicts for a batch of cards by name.
+
+    Args:
+        None
+
+    Returns:
+        JSON object with 'found' mapping names to descriptions and 'missing' mapping names to errors.
+    """
     data = request.get_json(silent=True) or {}
     try:
         cards = parse_card_list_payload(data)
@@ -435,12 +634,17 @@ def get_vector_descriptions():
 
     return jsonify({"found": found, "missing": missing})
 
-# Example Request:
-# curl -X POST http://127.0.0.1:5000/get_random_vector
 @app.route('/get_random_vector', methods=['POST'])
 @limiter.limit(set_limit)
 def get_random_vector():
-    """Get a random vector from the database."""
+    """Return the id and raw embedding vector for a randomly sampled card.
+
+    Args:
+        None
+
+    Returns:
+        JSON object with 'id' and 'vector' (list of floats).
+    """
     random_vector = vd.get_random_vector()
     return jsonify(
         {
@@ -449,20 +653,30 @@ def get_random_vector():
         }
     )
 
-# Example Request:
-# Invoke-RestMethod -Method Post -Uri "http://127.0.0.1:5000/get_random_vector_description"
 @app.route('/get_random_vector_description', methods=['POST'])
 @limiter.limit(set_limit)
 def get_random_vector_description():
-    """Get decoded metadata for a random vector."""
+    """Return the description dict for a randomly sampled card.
+
+    Args:
+        None
+
+    Returns:
+        JSON object with card metadata from the vector database.
+    """
     return jsonify(vd.get_vector_description_dict(vd.get_random_vector()[0]))
 
-# Example Request:
-# Invoke-RestMethod -Method Post -Uri "http://127.0.0.1:5000/get_similar_vectors" -ContentType "application/json" -Body '{"id":"Shunt","num_vectors":10}'
 @app.route('/get_similar_vectors', methods=['POST'])
 @limiter.limit(set_limit)
 def get_similar_vectors():
-    """Get nearest-neighbor vectors for a requested id."""
+    """Return the most similar cards to a given card, ranked by vector similarity.
+
+    Args:
+        None
+
+    Returns:
+        JSON object mapping rank indices to card description dicts.
+    """
     data = request.get_json(silent=True) or {}
     try:
         v_id = parse_required_card_id(data)
@@ -488,12 +702,20 @@ def get_similar_vectors():
 
     return jsonify(results)
 
-# Example Request:
-# curl -X POST "http://127.0.0.1:5000/get_tags" -H "Content-Type: application/json" -d "{\"id\":\"Magnus the Red\",\"threshold\":0.55,\"top_k\":8}"
 @app.route('/get_tags', methods=['POST'])
 @limiter.limit(set_limit)
 def get_tags():
-    """Predict tags for a stored vector by id."""
+    """Return predicted gameplay tags for a card by name.
+
+    Args:
+        None
+
+    Returns:
+        JSON object with 'predicted', 'predicted_scores', 'scores', and 'threshold'.
+    """
+    if model is None:
+        return error("tagging model not loaded", 503)
+
     data = request.get_json(silent=True) or {}
     try:
         v_id = parse_required_card_id(data)
@@ -518,7 +740,17 @@ def get_tags():
 @app.route('/get_tag_list', methods=['POST'])
 @limiter.limit(set_limit)
 def get_tag_list():
-    """Predict tags for a list of card names."""
+    """Return predicted gameplay tags for a batch of cards by name.
+
+    Args:
+        None
+
+    Returns:
+        JSON object with 'found' mapping names to tag results and 'missing' mapping names to errors.
+    """
+    if model is None:
+        return error("tagging model not loaded", 503)
+
     data = request.get_json(silent=True) or {}
     try:
         cards = parse_card_list_payload(data)
@@ -547,7 +779,17 @@ def get_tag_list():
 @app.route('/get_tags_from_vector', methods=['POST'])
 @limiter.limit(set_limit)
 def get_tags_from_vector():
-    """Predict tags from a raw vector provided in request JSON."""
+    """Return predicted gameplay tags for a raw embedding vector.
+
+    Args:
+        None
+
+    Returns:
+        JSON object with 'predicted', 'predicted_scores', 'scores', and 'threshold'.
+    """
+    if model is None:
+        return error("tagging model not loaded", 503)
+
     data = request.get_json(silent=True) or {}
     if "vector" not in data or not isinstance(data["vector"], list):
         return error("JSON body must include 'vector': [float, ...]", 400)
@@ -566,7 +808,19 @@ def get_tags_from_vector():
 @app.route('/generate_deck', methods=['POST'])
 @limiter.limit(set_limit)
 def generate_deck():
-    """Generate a deck from a requested commander id."""
+    """Generate a Commander deck list for the given commander card.
+
+    Args:
+        None
+
+    Returns:
+        JSON object mapping card names to quantities, plus generation stats.
+    """
+    if gen is None:
+        if _gen_state == "failed":
+            return error("deck generation model failed to load", 503)
+        return error("deck generation model is still loading, please retry shortly", 503)
+
     data = request.get_json(silent=True) or {}
     try:
         v_id = parse_required_card_id(data)
@@ -583,7 +837,14 @@ def generate_deck():
 @app.route('/analyze_deck', methods=['POST'])
 @limiter.limit(set_limit)
 def analyze_deck():
-    """Analyze a deck list and return computed metrics."""
+    """Analyze a submitted deck list and return SimpleDeckAnalyzer metrics.
+
+    Args:
+        None
+
+    Returns:
+        JSON object with mana curve, tag distribution, and other deck statistics.
+    """
     data = request.get_json(silent=True) or {}
     commander = data.get("commander")
     cards = data.get("cards")
@@ -605,7 +866,14 @@ def analyze_deck():
     return jsonify(analyzer.analyze())
 
 def format_id(v_id: str) -> str:
-    """Normalize title-casing while preserving common transition words."""
+    """Apply title-case formatting to a card name, preserving lowercase transition words.
+
+    Args:
+        v_id: Raw card name string to format.
+
+    Returns:
+        Title-cased card name with transition words (of, the, in, etc.) in lowercase.
+    """
     transition_words = {'of', 'the', 'in', 'on', 'at', 'to', 'for', 'and', 'but', 'or', 'nor'}
 
     words: list[str] = v_id.split(' ')
@@ -619,10 +887,17 @@ def format_id(v_id: str) -> str:
 
 @torch.inference_mode()
 def predict_from_vector(vec_np: np.ndarray, threshold: float, top_k: int = 8):
-    """Predict tags and top scores from a vector input."""
-    if model is None:
-        return error("Tagging model not loaded", 503)
+    """Run tag prediction on a raw numpy embedding vector.
 
+    Args:
+        vec_np: Float32 numpy array representing a card embedding.
+        threshold: Minimum sigmoid probability to include a tag in predicted output.
+        top_k: Number of highest-scoring tags to include in the scores list.
+
+    Returns:
+        Dict with 'predicted' (list of tag strings), 'predicted_scores' (list of dicts),
+        'scores' (top-k list of dicts), and 'threshold' (float).
+    """
     x = torch.from_numpy(vec_np.astype(np.float32)).unsqueeze(0).to(device)
     logits = model(x)
     probs = torch.sigmoid(logits).float().cpu().numpy()[0]
@@ -645,20 +920,16 @@ def predict_from_vector(vec_np: np.ndarray, threshold: float, top_k: int = 8):
     }
 
 def main() -> None:
-    """Run the Flask API server."""
+    """Start the Flask development server on the configured port.
+
+    Args:
+        None
+
+    Returns:
+        None
+    """
     app.run(host='0.0.0.0', port=int(os.environ.get('DEFAULT_PORT', 8080)))
 
 
 if __name__ == '__main__':
     main()
-    API_KEY = os.environ.get("FIREBASE_API_KEY", "")
-    URL = "http://127.0.0.1:5000/get_random_vector"
-
-    response = requests.post(
-        URL,
-        headers={"x-api-key": API_KEY},
-        timeout=10,
-    )
-
-    print(response.status_code)
-    print(response.json())
