@@ -39,7 +39,7 @@
     user: null,
     cards: [],
     deckTitle: "",
-    sortBy: "category",
+    viewMode: "stack",
     filterCategory: "",
     search: "",
     commander: "",
@@ -59,16 +59,21 @@
     completeBtn: document.getElementById("completeBtn"),
     importToggleBtn: document.getElementById("importToggleBtn"),
     importCloseBtn: document.getElementById("importCloseBtn"),
-    importPanel: document.getElementById("importPanel"),
+    importModal: document.getElementById("importModal"),
     importCards: document.getElementById("importCards"),
     importFile: document.getElementById("importFile"),
     importFailed: document.getElementById("importFailed"),
     importBtn: document.getElementById("importBtn"),
+    downloadBtn: document.getElementById("downloadBtn"),
+    exportModal: document.getElementById("exportModal"),
+    exportModalClose: document.getElementById("exportModalClose"),
+    exportCloseFooter: document.getElementById("exportCloseFooter"),
     exportTxtBtn: document.getElementById("exportTxtBtn"),
     exportCsvBtn: document.getElementById("exportCsvBtn"),
     saveBtn: document.getElementById("saveBtn"),
     searchInput: document.getElementById("searchInput"),
-    sortSelect: document.getElementById("sortSelect"),
+    viewStack: document.getElementById("viewStack"),
+    viewList: document.getElementById("viewList"),
     filterSelect: document.getElementById("filterSelect"),
     deckBoard: document.getElementById("deckBoard"),
     cardCount: document.getElementById("cardCount"),
@@ -118,7 +123,7 @@
     if (typeof text === "string") {
       setStatus(text, value ? "busy" : "");
     }
-    [els.generateBtn, els.completeBtn, els.importBtn, els.saveBtn, els.exportTxtBtn, els.exportCsvBtn].forEach(
+    [els.generateBtn, els.completeBtn, els.importBtn, els.saveBtn].forEach(
       (btn) => {
         if (btn) btn.disabled = value;
       },
@@ -126,6 +131,12 @@
   }
 
   async function getSession() {
+    const meta = document.querySelector('meta[name="app-session"]');
+    if (meta) {
+      const data = JSON.parse(meta.content);
+      meta.remove();
+      return data;
+    }
     const res = await fetch("/session.php", { method: "GET" });
     if (!res.ok) throw new Error(`Session check failed: ${res.status}`);
     return res.json();
@@ -600,26 +611,6 @@
     });
   }
 
-  function compareCards(a, b) {
-    if (state.sortBy === "name") {
-      return a.name.localeCompare(b.name);
-    }
-    if (state.sortBy === "quantity") {
-      return b.quantity - a.quantity || a.name.localeCompare(b.name);
-    }
-    if (state.sortBy === "tag") {
-      return (
-        formatTag(a.primaryTag).localeCompare(formatTag(b.primaryTag)) ||
-        a.name.localeCompare(b.name)
-      );
-    }
-    const ag = getCardGroup(a);
-    const bg = getCardGroup(b);
-    if (ag === "Commander" && bg !== "Commander") return -1;
-    if (bg === "Commander" && ag !== "Commander") return 1;
-    return ag.localeCompare(bg) || a.name.localeCompare(b.name);
-  }
-
   function getDisplayCards() {
     let list = state.cards.slice();
     if (state.search) {
@@ -629,7 +620,6 @@
     if (state.filterCategory) {
       list = list.filter((card) => getCardGroup(card) === state.filterCategory);
     }
-    list.sort(compareCards);
     return list;
   }
 
@@ -666,14 +656,14 @@
     const quantity = Math.max(1, Math.floor(Number(nextValue) || 1));
     card.quantity = quantity;
     updateCounts();
-    renderDeckBoard();
+    renderDeck();
     scheduleAnalysis(true);
   }
 
   function removeCard(card) {
     state.cards = state.cards.filter((item) => item.id !== card.id);
     renderCategoryFilter();
-    renderDeckBoard();
+    renderDeck();
     scheduleAnalysis(true);
   }
 
@@ -759,8 +749,84 @@
     return cardEl;
   }
 
+  function renderDeck() {
+    if (state.viewMode === "list") {
+      renderDeckList();
+    } else {
+      renderDeckBoard();
+    }
+  }
+
+  function renderDeckList() {
+    if (!els.deckBoard) return;
+    const displayCards = getDisplayCards()
+      .slice()
+      .sort((a, b) => {
+        const ag = getCardGroup(a), bg = getCardGroup(b);
+        if (ag === "Commander") return -1;
+        if (bg === "Commander") return 1;
+        return ag.localeCompare(bg) || a.name.localeCompare(b.name);
+      });
+
+    els.deckBoard.innerHTML = "";
+    els.deckBoard.className = "deck-list";
+
+    displayCards.forEach((card) => {
+      const row = document.createElement("div");
+      row.className = "deck-list-row";
+
+      const qty = document.createElement("span");
+      qty.className = "deck-list-qty";
+      qty.textContent = card.quantity;
+
+      const name = document.createElement("button");
+      name.className = "deck-list-name";
+      name.type = "button";
+      name.textContent = card.name;
+      name.addEventListener("click", () =>
+        loadCardMeta(card.name).then((meta) => openCardModal(card, meta))
+      );
+
+      const tag = document.createElement("span");
+      tag.className = "deck-list-tag";
+      tag.textContent = getCardGroup(card);
+
+      const actions = document.createElement("div");
+      actions.className = "deck-list-actions";
+
+      const minusBtn = document.createElement("button");
+      minusBtn.type = "button";
+      minusBtn.className = "deck-list-action-btn";
+      minusBtn.textContent = "−";
+      minusBtn.addEventListener("click", () => updateCardQuantity(card, card.quantity - 1));
+
+      const plusBtn = document.createElement("button");
+      plusBtn.type = "button";
+      plusBtn.className = "deck-list-action-btn";
+      plusBtn.textContent = "+";
+      plusBtn.addEventListener("click", () => updateCardQuantity(card, card.quantity + 1));
+
+      const removeBtn = document.createElement("button");
+      removeBtn.type = "button";
+      removeBtn.className = "deck-list-action-btn deck-list-remove";
+      removeBtn.textContent = "×";
+      removeBtn.addEventListener("click", () => removeCard(card));
+
+      actions.appendChild(minusBtn);
+      actions.appendChild(plusBtn);
+      actions.appendChild(removeBtn);
+
+      row.appendChild(qty);
+      row.appendChild(name);
+      row.appendChild(tag);
+      row.appendChild(actions);
+      els.deckBoard.appendChild(row);
+    });
+  }
+
   function renderDeckBoard() {
     if (!els.deckBoard) return;
+    els.deckBoard.className = "deck-board";
     const grouped = new Map();
     getDisplayCards().forEach((card) => {
       const group = getCardGroup(card);
@@ -1076,7 +1142,7 @@
       });
 
       renderCategoryFilter();
-      renderDeckBoard();
+      renderDeck();
       await runAnalysis({ showBusy: false });
       setStatus("Deck generated and analyzed.", "success");
     } catch (err) {
@@ -1133,7 +1199,7 @@
       }
 
       renderCategoryFilter();
-      renderDeckBoard();
+      renderDeck();
       scheduleAnalysis(true);
       setStatus(`Added ${additions.length} similar cards.`, "success");
     } catch (err) {
@@ -1181,7 +1247,7 @@
         if (els.importCards) els.importCards.value = "";
         if (els.importFile) els.importFile.value = "";
         renderCategoryFilter();
-        renderDeckBoard();
+        renderDeck();
         await runAnalysis({ showBusy: false });
       }
 
@@ -1363,7 +1429,7 @@
     ensureCommanderCardListed();
     await hydrateMetaForNames(state.cards.map((card) => card.name));
     renderCategoryFilter();
-    renderDeckBoard();
+    renderDeck();
     await runAnalysis({ showBusy: false });
     setStatus("Saved deck loaded.", "success");
   }
@@ -1598,19 +1664,37 @@
     els.completeBtn.addEventListener("click", completeDeck);
     els.saveBtn.addEventListener("click", saveDeck);
     els.importBtn.addEventListener("click", importCards);
-    els.exportTxtBtn.addEventListener("click", exportDeckTxt);
-    els.exportCsvBtn.addEventListener("click", exportDeckCsv);
 
-    // Import panel toggle
-    if (els.importToggleBtn && els.importPanel) {
-      els.importToggleBtn.addEventListener("click", () => {
-        els.importPanel.hidden = !els.importPanel.hidden;
+    // Import modal
+    if (els.importToggleBtn && els.importModal) {
+      els.importToggleBtn.addEventListener("click", () => els.importModal.showModal());
+    }
+    if (els.importCloseBtn && els.importModal) {
+      els.importCloseBtn.addEventListener("click", () => els.importModal.close());
+    }
+    if (els.importModal) {
+      els.importModal.addEventListener("click", (e) => {
+        if (e.target === els.importModal) els.importModal.close();
       });
     }
-    if (els.importCloseBtn && els.importPanel) {
-      els.importCloseBtn.addEventListener("click", () => {
-        els.importPanel.hidden = true;
+
+    // Export modal
+    if (els.downloadBtn && els.exportModal) {
+      els.downloadBtn.addEventListener("click", () => els.exportModal.showModal());
+    }
+    const closeExportModal = () => els.exportModal && els.exportModal.close();
+    if (els.exportModalClose) els.exportModalClose.addEventListener("click", closeExportModal);
+    if (els.exportCloseFooter) els.exportCloseFooter.addEventListener("click", closeExportModal);
+    if (els.exportModal) {
+      els.exportModal.addEventListener("click", (e) => {
+        if (e.target === els.exportModal) els.exportModal.close();
       });
+    }
+    if (els.exportTxtBtn) {
+      els.exportTxtBtn.addEventListener("click", () => { exportDeckTxt(); closeExportModal(); });
+    }
+    if (els.exportCsvBtn) {
+      els.exportCsvBtn.addEventListener("click", () => { exportDeckCsv(); closeExportModal(); });
     }
 
     els.commander.addEventListener("change", () => {
@@ -1620,15 +1704,20 @@
     });
     els.searchInput.addEventListener("input", () => {
       state.search = els.searchInput.value.trim();
-      renderDeckBoard();
+      renderDeck();
     });
-    els.sortSelect.addEventListener("change", () => {
-      state.sortBy = els.sortSelect.value;
-      renderDeckBoard();
+    [els.viewStack, els.viewList].forEach((btn) => {
+      if (!btn) return;
+      btn.addEventListener("click", () => {
+        state.viewMode = btn === els.viewStack ? "stack" : "list";
+        els.viewStack.classList.toggle("is-active", state.viewMode === "stack");
+        els.viewList.classList.toggle("is-active", state.viewMode === "list");
+        renderDeck();
+      });
     });
     els.filterSelect.addEventListener("change", () => {
       state.filterCategory = els.filterSelect.value;
-      renderDeckBoard();
+      renderDeck();
     });
   }
 
@@ -1636,7 +1725,7 @@
     bindBuilderEvents();
     bindModalEvents();
     renderCategoryFilter();
-    renderDeckBoard();
+    renderDeck();
     renderAnalysis();
     updateDeckHeader();
 

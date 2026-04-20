@@ -4,6 +4,11 @@ declare(strict_types=1);
 require_once __DIR__ . '/../config.php';
 app_start_session();
 $user = $_SESSION['user'] ?? null;
+session_write_close();
+$initialSession = json_encode([
+    'authenticated' => is_array($user),
+    'user'          => $user,
+]);
 ?>
 <!doctype html>
 <html lang="en">
@@ -65,9 +70,6 @@ $user = $_SESSION['user'] ?? null;
           <div class="action-row">
             <button id="generateBtn" class="button primary" type="button">Generate Deck</button>
             <button id="completeBtn" class="button" type="button">Add Similar Cards</button>
-            <button id="importToggleBtn" class="button" type="button">Import</button>
-            <button id="exportTxtBtn" class="button ghost" type="button">Export TXT</button>
-            <button id="exportCsvBtn" class="button ghost" type="button">Export CSV</button>
             <div class="deck-badge"><span id="cardCount">0 cards</span></div>
           </div>
           <div class="status-line">
@@ -75,29 +77,15 @@ $user = $_SESSION['user'] ?? null;
           </div>
         </section>
 
-        <section id="importPanel" class="panel import-panel" hidden>
-          <div class="panel-heading">
-            <div><strong>Import Cards</strong></div>
-            <button id="importCloseBtn" class="button ghost" type="button">Close</button>
-          </div>
-          <div class="group">
-            <label for="importFile">Upload a text file (.txt)</label>
-            <input id="importFile" class="input" type="file" accept=".txt,.csv">
-          </div>
-          <div class="group">
-            <label for="importCards">Or paste a deck list below</label>
-            <textarea id="importCards" class="textarea" placeholder="1 Sol Ring&#10;4x Lightning Bolt&#10;..."></textarea>
-          </div>
-          <div class="action-row">
-            <button id="importBtn" class="button primary" type="button">Import Cards</button>
-          </div>
-          <div id="importFailed" class="import-failed" hidden></div>
-        </section>
 
         <section class="panel deck-panel">
           <div class="panel-heading">
             <div>
               <strong>Deck Stacks</strong>
+            </div>
+            <div class="deck-panel-actions">
+              <button id="importToggleBtn" class="button ghost" type="button">Import</button>
+              <button id="downloadBtn" class="button ghost" type="button">Download</button>
             </div>
           </div>
           <div class="deck-toolbar">
@@ -110,13 +98,26 @@ $user = $_SESSION['user'] ?? null;
               <select id="filterSelect" class="input"></select>
             </div>
             <div class="group">
-              <label for="sortSelect">Sort</label>
-              <select id="sortSelect" class="input">
-                <option value="category">Group</option>
-                <option value="name">Name</option>
-                <option value="quantity">Quantity</option>
-                <option value="tag">Primary Tag</option>
-              </select>
+              <label>View</label>
+              <div class="view-toggle">
+                <button id="viewStack" class="view-toggle-btn is-active" type="button" title="Stack view">
+                  <svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <rect x="2" y="2" width="7" height="9" rx="1.5" fill="currentColor"/>
+                    <rect x="11" y="2" width="7" height="9" rx="1.5" fill="currentColor"/>
+                    <rect x="2" y="13" width="7" height="5" rx="1.5" fill="currentColor" opacity=".4"/>
+                    <rect x="11" y="13" width="7" height="5" rx="1.5" fill="currentColor" opacity=".4"/>
+                  </svg>
+                  Stacks
+                </button>
+                <button id="viewList" class="view-toggle-btn" type="button" title="List view">
+                  <svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <rect x="2" y="3" width="16" height="2.5" rx="1.25" fill="currentColor"/>
+                    <rect x="2" y="8.75" width="16" height="2.5" rx="1.25" fill="currentColor"/>
+                    <rect x="2" y="14.5" width="16" height="2.5" rx="1.25" fill="currentColor"/>
+                  </svg>
+                  List
+                </button>
+              </div>
             </div>
           </div>
           <div id="deckBoard" class="deck-board"></div>
@@ -155,6 +156,58 @@ $user = $_SESSION['user'] ?? null;
     </main>
   </div>
 
+  <dialog id="importModal" class="deck-modal">
+    <div class="deck-modal-inner">
+      <div class="deck-modal-header">
+        <strong>Import Cards</strong>
+        <button id="importCloseBtn" class="card-modal-close" type="button" aria-label="Close">×</button>
+      </div>
+      <div class="group">
+        <label for="importFile">Upload a text file (.txt)</label>
+        <input id="importFile" class="input" type="file" accept=".txt,.csv">
+      </div>
+      <div class="group">
+        <label for="importCards">Or paste a deck list below</label>
+        <textarea id="importCards" class="textarea" placeholder="1 Sol Ring&#10;4x Lightning Bolt&#10;..."></textarea>
+      </div>
+      <div class="action-row">
+        <button id="importBtn" class="button primary" type="button">Import Cards</button>
+      </div>
+      <div id="importFailed" class="import-failed" hidden></div>
+    </div>
+  </dialog>
+
+  <dialog id="exportModal" class="deck-modal export-modal">
+    <div class="deck-modal-inner">
+      <div class="deck-modal-header">
+        <strong>Download Deck</strong>
+        <button id="exportModalClose" class="card-modal-close" type="button" aria-label="Close">×</button>
+      </div>
+      <div class="export-options">
+        <button id="exportCsvBtn" class="export-option-card" type="button">
+          <svg class="export-option-icon" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <rect x="4" y="4" width="40" height="40" rx="4" stroke="currentColor" stroke-width="3"/>
+            <line x1="4" y1="17" x2="44" y2="17" stroke="currentColor" stroke-width="3"/>
+            <line x1="4" y1="31" x2="44" y2="31" stroke="currentColor" stroke-width="3"/>
+            <line x1="19" y1="4" x2="19" y2="44" stroke="currentColor" stroke-width="3"/>
+          </svg>
+          <span class="export-option-label">Download CSV</span>
+        </button>
+        <button id="exportTxtBtn" class="export-option-card" type="button">
+          <svg class="export-option-icon" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M10 4h20l10 10v30H10V4z" stroke="currentColor" stroke-width="3" stroke-linejoin="round"/>
+            <path d="M30 4v10h10" stroke="currentColor" stroke-width="3" stroke-linejoin="round"/>
+            <line x1="16" y1="22" x2="32" y2="22" stroke="currentColor" stroke-width="3" stroke-linecap="round"/>
+            <line x1="16" y1="30" x2="32" y2="30" stroke="currentColor" stroke-width="3" stroke-linecap="round"/>
+            <line x1="16" y1="38" x2="24" y2="38" stroke="currentColor" stroke-width="3" stroke-linecap="round"/>
+          </svg>
+          <span class="export-option-label">Download TXT</span>
+        </button>
+      </div>
+      <button id="exportCloseFooter" class="button" type="button" style="align-self:center">Close</button>
+    </div>
+  </dialog>
+
   <dialog id="cardModal" class="card-modal">
     <div class="card-modal-inner">
       <button id="cardModalClose" class="card-modal-close" type="button" aria-label="Close">×</button>
@@ -180,6 +233,7 @@ $user = $_SESSION['user'] ?? null;
     </div>
   </dialog>
 
-  <script src="/app.js"></script>
+  <meta name="app-session" content="<?= htmlspecialchars($initialSession, ENT_QUOTES, 'UTF-8') ?>">
+  <script src="/app.js?v=<?= filemtime(__DIR__.'/app.js') ?>"></script>
 </body>
 </html>

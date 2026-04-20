@@ -5,7 +5,11 @@ require_once __DIR__ . '/../config.php';
 
 function apikeys_project_id(): string
 {
-    return env_required('PROJECT_ID');
+    $id = (string)(getenv('PROJECT_ID') ?: '');
+    if ($id === '') {
+        throw new RuntimeException('Missing required env var: PROJECT_ID');
+    }
+    return $id;
 }
 
 function apikeys_firestore_base_url(): string
@@ -43,14 +47,14 @@ function apikeys_token_from_service_account(string $path): array
     $raw = file_get_contents($path);
     $json = json_decode((string)$raw, true);
     if (!is_array($json)) {
-        app_json(['error' => 'Invalid service account credentials JSON'], 500);
+        throw new RuntimeException('Invalid service account credentials JSON');
     }
 
     $clientEmail = (string)($json['client_email'] ?? '');
     $privateKey  = (string)($json['private_key'] ?? '');
     $tokenUri    = (string)($json['token_uri'] ?? 'https://oauth2.googleapis.com/token');
     if ($clientEmail === '' || $privateKey === '') {
-        app_json(['error' => 'Service account credentials missing required fields'], 500);
+        throw new RuntimeException('Service account credentials missing required fields');
     }
 
     $now     = time();
@@ -67,7 +71,7 @@ function apikeys_token_from_service_account(string $path): array
     $signature = '';
     $ok = openssl_sign($unsigned, $signature, $privateKey, OPENSSL_ALGO_SHA256);
     if (!$ok) {
-        app_json(['error' => 'Failed to sign service account JWT'], 500);
+        throw new RuntimeException('Failed to sign service account JWT');
     }
 
     $jwt = $unsigned . '.' . apikeys_base64url_encode($signature);
@@ -88,7 +92,7 @@ function apikeys_token_from_service_account(string $path): array
 
     $payload = json_decode((string)$tokenRaw, true);
     if (!is_array($payload) || empty($payload['access_token'])) {
-        app_json(['error' => 'Failed to obtain Firestore access token from service account'], 500);
+        throw new RuntimeException('Failed to obtain Firestore access token from service account');
     }
 
     return [(string)$payload['access_token'], $now + (int)($payload['expires_in'] ?? 3600)];
@@ -107,7 +111,7 @@ function apikeys_token_from_metadata_server(): array
 
     $payload = json_decode((string)$raw, true);
     if (!is_array($payload) || empty($payload['access_token'])) {
-        app_json(['error' => 'Failed to obtain Firestore access token from metadata server'], 500);
+        throw new RuntimeException('Failed to obtain Firestore access token from metadata server');
     }
 
     return [(string)$payload['access_token'], time() + (int)($payload['expires_in'] ?? 3600)];

@@ -309,10 +309,140 @@ select,
 
 .deck-toolbar {
   display: grid;
-  grid-template-columns: 2fr 1fr 1fr;
+  grid-template-columns: 2fr 1fr auto;
   gap: 12px;
   align-items: end;
   margin-bottom: 16px;
+}
+
+.view-toggle {
+  display: flex;
+  gap: 4px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 3px;
+}
+
+.view-toggle-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border: none;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.view-toggle-btn svg {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+}
+
+.view-toggle-btn:hover {
+  color: var(--text);
+}
+
+.view-toggle-btn.is-active {
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--text);
+}
+
+/* ── List View ─────────────────────────────────────────────────── */
+
+.deck-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.deck-list-row {
+  display: grid;
+  grid-template-columns: 36px 1fr auto auto;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.02);
+  transition: background 0.12s;
+}
+
+.deck-list-row:hover {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.deck-list-qty {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--accent-strong);
+  text-align: center;
+  background: rgba(233, 137, 52, 0.12);
+  border-radius: 6px;
+  padding: 3px 6px;
+}
+
+.deck-list-name {
+  background: none;
+  border: none;
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 500;
+  text-align: left;
+  cursor: pointer;
+  padding: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.deck-list-name:hover {
+  color: var(--accent-strong);
+}
+
+.deck-list-tag {
+  font-size: 11px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.deck-list-actions {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+}
+
+.deck-list-action-btn {
+  width: 26px;
+  height: 26px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.12s, color 0.12s;
+}
+
+.deck-list-action-btn:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text);
+}
+
+.deck-list-remove:hover {
+  background: rgba(255, 80, 80, 0.12);
+  color: var(--danger);
+  border-color: var(--danger);
 }
 
 .deck-board {
@@ -376,6 +506,7 @@ select,
 .column-image-stack {
   position: relative;
   padding: 6px 0 20px;
+  overflow: hidden;
 }
 
 .column-stack-card {
@@ -805,6 +936,76 @@ select,
   .stats-summary-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
+}
+
+/* ── Deck Modals (Import / Export) ────────────────────────────── */
+
+.deck-modal {
+  border: none;
+  border-radius: 20px;
+  padding: 0;
+  background: transparent;
+  width: calc(100vw - 32px);
+  max-width: 520px;
+}
+
+.deck-modal::backdrop {
+  background: rgba(0, 0, 0, 0.75);
+  backdrop-filter: blur(4px);
+}
+
+.deck-modal-inner {
+  position: relative;
+  background: linear-gradient(160deg, #1e1e1e, #141414);
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  padding: 28px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.deck-modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.export-options {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+}
+
+.export-option-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  padding: 28px 16px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  color: var(--text);
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.export-option-card:hover {
+  background: rgba(255, 255, 255, 0.09);
+  border-color: var(--accent);
+}
+
+.export-option-icon {
+  width: 56px;
+  height: 56px;
+  color: var(--accent);
+}
+
+.export-option-label {
+  font-size: 14px;
+  font-weight: 600;
 }
 
 /* ── Card Detail Modal ─────────────────────────────────────────── */

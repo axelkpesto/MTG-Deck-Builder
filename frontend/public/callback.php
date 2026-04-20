@@ -74,14 +74,14 @@ $_SESSION['user'] = [
 $_SESSION['oauth_access_token'] = $accessToken;
 
 $userEmail = (string)($user['email'] ?? '');
-$pepper    = env_required('API_KEY_PEPPER');
-if ($userEmail !== '') {
+$pepper    = (string)(getenv('API_KEY_PEPPER') ?: '');
+if ($userEmail !== '' && $pepper !== '') {
     try {
         $userApiKey = apikeys_register($userEmail, $pepper);
         $_SESSION['user_api_key'] = $userApiKey;
     } catch (Throwable $e) {
         error_log('API key registration failed: ' . $e->getMessage());
-        // Non-fatal: user can still browse; requests will fall back to the global key.
+        // Non-fatal: user can still browse without a personal API key.
     }
 }
 unset($userEmail, $pepper);
