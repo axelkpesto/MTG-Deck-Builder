@@ -1,5 +1,4 @@
-"""Configuration dataclasses for deck generation and training."""
-
+"""Dataclass configuration types for deck generation paths, hyperparameters, and training."""
 from dataclasses import dataclass, field
 from typing import Tuple
 from backend.config import CONFIG
@@ -7,8 +6,7 @@ from backend.config import CONFIG
 
 @dataclass(frozen=True)
 class TagPenalty:
-    """Penalty schedule for a single gameplay tag count target range."""
-
+    """Per-tag soft/hard penalty configuration for deck construction constraints."""
     tag: str
     min_target: int
     max_target: int
@@ -19,8 +17,7 @@ class TagPenalty:
 
 @dataclass(frozen=True)
 class DeckGenPaths:
-    """Filesystem paths used by deck generation runtime."""
-
+    """File paths for all artifacts required to load a DeckGenBundle."""
     nodes_pt: str = CONFIG.datasets["GRAPH_NODES_DATA_PATH"]
     edges_pt: str = CONFIG.datasets["GRAPH_EDGES_DATA_PATH"]
     vectors_pt: str = CONFIG.datasets["VECTOR_DATABASE_PATH"]
@@ -28,26 +25,23 @@ class DeckGenPaths:
     tags_json: str = CONFIG.datasets["TAGS_DATASET_PATH"]
     ckpt_pt: str = CONFIG.models["GEN_MODEL_PATH"]
     node_embeddings_pt: str = CONFIG.datasets["NODE_EMBEDDINGS_PATH"]
+    node_features_pt: str = CONFIG.datasets["NODE_FEATURES_PATH"]
 
 
 @dataclass(frozen=True)
 class GenConfig:
-    """Generation-time hyperparameters and target constraints."""
-
+    """Hyperparameters controlling deck generation sampling and constraint enforcement."""
     deck_size: int = 100
     temperature: float = 0.85
     top_k: int = 256
 
-    # Candidate pool
     neighbor_k: int = 400
     candidate_budget: int = 2000
     explore_random: int = 512
 
-    # Similarity (for learned targets)
     similar_commander_k: int = 32
     min_samples: int = 25
 
-    # Quantiles for learned targets (from SimpleDeckAnalyzer stats)
     land_q: float = 0.50
     land_cap_q: float = 0.90
     basic_ratio_q: float = 0.50
@@ -55,7 +49,6 @@ class GenConfig:
     tag_min_q: float = 0.25
     tag_max_q: float = 0.75
 
-    # Hard clamps for learned targets (explicit so generator doesn't need getattr fallbacks)
     land_min: int = 32
     land_max: int = 45
 
@@ -65,26 +58,21 @@ class GenConfig:
     basics_min: int = 6
     basics_max: int = 30
 
-    # Land pressure
     land_boost: float = 1.25
     land_penalty_after_target: float = 5.0
 
-    # Basics behavior
     basic_min_boost: float = 1.2
     basic_type_boost: float = 1.4
     basic_force_boost: float = 6.0
     basic_land_penalty_when_over_ratio: float = 2.0
     force_basic_when_behind: bool = True
 
-    # Duplicate basic-land penalty (discourage excessive one basic type)
     dup_penalty_lambda: float = 0.12
     dup_penalty_power: float = 0.6
     dup_penalty_cap: float = 1.25
 
-    # Curve shaping
     curve_penalty: float = 1.25
 
-    # Ramp moderation (soft/hard cap)
     ramp_tag: str = "ramp"
     ramp_min: int = 9
     ramp_max: int = 14
@@ -92,7 +80,6 @@ class GenConfig:
     ramp_hard_penalty: float = 3.25
     ramp_hard_buffer: int = 2
 
-    # "Common" tag moderation (soft/hard cap)
     common_tag_penalties: Tuple[TagPenalty, ...] = field(
         default_factory=lambda: (
             TagPenalty(tag="card_draw", min_target=8, max_target=14, soft_penalty=0.9, hard_penalty=2.1, hard_buffer=2),
@@ -102,7 +89,6 @@ class GenConfig:
         )
     )
 
-    # Tags that should not define "strategy"
     non_strategy_tags: Tuple[str, ...] = (
         "ramp",
         "removal",
@@ -114,7 +100,7 @@ class GenConfig:
 
 @dataclass(frozen=True)
 class DeckTrainConfig:
-    """Training hyperparameters for the deck generation model."""
+    """Hyperparameters for training the CommanderDeckGNN model."""
 
     seed: int = 7
     epochs: int = 5
@@ -128,7 +114,6 @@ class DeckTrainConfig:
     state_dim: int = 256
     gnn_layers: int = 3
 
-    # sequence training
     max_prefix_len: int = 48
     num_negatives: int = 2048
     temperature: float = 1.0
@@ -137,8 +122,6 @@ class DeckTrainConfig:
 
     combo_loss_weight: float = 2.0
 
-    # logging
     log_every: int = 0
 
-    # output extras
     save_node_embeddings: bool = True

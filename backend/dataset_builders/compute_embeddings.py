@@ -1,3 +1,5 @@
+"""Pre-compute and save GNN node embeddings for the deck generation model."""
+# pylint: disable=duplicate-code
 import torch
 
 from backend.config import CONFIG
@@ -7,6 +9,7 @@ from backend.deckgen.model import CommanderDeckGNN
 
 
 def main() -> None:
+    """Load a trained GNN checkpoint and persist node embeddings to disk."""
     paths = DeckGenPaths()
     gen = GenConfig()
     device = torch.device("cpu")

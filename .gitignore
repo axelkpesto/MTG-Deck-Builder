@@ -11,7 +11,9 @@ venv/
 .mypy_cache/
 *.txt
 !requirements.txt
+!deployment.txt
 !Dockerfile.txt
 text/
 test.py
 credentials/
+node_features.pt

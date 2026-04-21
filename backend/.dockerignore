@@ -33,8 +33,9 @@ run-local.sh
 
 #Text Files
 *.txt
-!requirements.txt
+# !requirements.txt
 !Dockerfile.txt
+!deployment.txt
 
 #Unimportant Folders
 dataset_builders/
@@ -43,3 +44,4 @@ tests/
 workers/
 legacy/
 frontend/
+data/
