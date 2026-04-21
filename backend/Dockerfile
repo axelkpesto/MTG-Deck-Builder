@@ -19,6 +19,6 @@ RUN pip install --no-cache-dir --upgrade pip
 RUN pip install --no-cache-dir -r backend/deployment.txt
 
 COPY startup.sh /startup.sh
-RUN chmod +x /startup.sh
+RUN sed -i 's/\r$//' /startup.sh && chmod +x /startup.sh
 
 CMD ["/startup.sh"]
