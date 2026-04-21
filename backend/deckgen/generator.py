@@ -1,5 +1,4 @@
-"""Deck generation logic driven by graph embeddings and heuristic constraints."""
-
+"""Autoregressive Commander deck generator using a trained GNN model."""
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Tuple
 from collections import defaultdict
@@ -15,7 +14,18 @@ from backend.deckgen.model import CommanderDeckGNN
 from backend.deckgen.utils import clamp_int, mana_value_bucket, basic_land_type, is_basic_land_name, allowed_basic_land_types, duplicate_penalty, extract_basic_ratio, extract_curve_counts, extract_land_count, extract_tag_count
 
 def pool_stats_for_commander(commander_name: str, commander_index: int, assets: DeckGenAssets, node_embeddings: torch.Tensor, gen: GenConfig) -> List[dict]:
-    """Collect training stats for commander-specific and similar commanders."""
+    """Collect historical deck stats for a commander and its nearest neighbors.
+
+    Args:
+        commander_name: Canonical name of the commander card.
+        commander_index: Graph node index of the commander.
+        assets: Pre-loaded DeckGenAssets.
+        node_embeddings: Node embedding matrix of shape (N, node_dim).
+        gen: Generation config providing similar_commander_k.
+
+    Returns:
+        List of deck stat dicts pooled from the commander and similar commanders.
+    """
     pooled: List[dict] = []
     pooled.extend(assets.by_commander_stats.get(commander_name, []))
 
@@ -29,7 +39,6 @@ def pool_stats_for_commander(commander_name: str, commander_index: int, assets: 
         cand_vecs = cand_vecs / (cand_vecs.norm(p=2, dim=1, keepdim=True) + 1e-8)
         sims = cand_vecs @ cmd_vec
 
-        # remove self if present
         self_pos = (cand == commander_index).nonzero(as_tuple=False)
         if self_pos.numel() > 0:
             sims[self_pos[0, 0]] = -1.0
@@ -42,7 +51,6 @@ def pool_stats_for_commander(commander_name: str, commander_index: int, assets: 
                 name = assets.node_names[idx]
                 pooled.extend(assets.by_commander_stats.get(name, []))
 
-    # Fallback to global if still empty
     if not pooled:
         pooled = list(assets.global_stats)
 
@@ -50,7 +58,15 @@ def pool_stats_for_commander(commander_name: str, commander_index: int, assets: 
 
 
 def learn_land_profile(pooled: List[dict], gen: GenConfig) -> Tuple[int, int, float, int]:
-    """Learn land and basics targets from pooled historical deck stats."""
+    """Derive land count and basic land ratio targets from historical deck stats.
+
+    Args:
+        pooled: List of deck stat dicts from pool_stats_for_commander.
+        gen: Generation config providing quantile and clamp parameters.
+
+    Returns:
+        A tuple of (land_target, land_cap, basic_ratio_target, basics_target).
+    """
     land_counts = [int(extract_land_count(s)) for s in pooled]
     basic_ratios = [float(extract_basic_ratio(s)) for s in pooled]
 
@@ -71,7 +87,14 @@ def learn_land_profile(pooled: List[dict], gen: GenConfig) -> Tuple[int, int, fl
 
 
 def learn_curve_target(pooled: List[dict]) -> List[int]:
-    """Learn target mana-curve bucket counts from pooled deck stats."""
+    """Derive target mana-curve bucket counts from historical deck stats.
+
+    Args:
+        pooled: List of deck stat dicts from pool_stats_for_commander.
+
+    Returns:
+        List of 7 integers representing the target card count per CMC bucket (0–6+).
+    """
     curves = [c for c in (extract_curve_counts(s) for s in pooled) if len(c) >= 7]
     a = np.asarray(curves, dtype=np.float32)
     med = np.median(a, axis=0)
@@ -79,7 +102,18 @@ def learn_curve_target(pooled: List[dict]) -> List[int]:
 
 
 def learn_tag_bounds(pooled: List[dict], tag: str, gen: GenConfig, fallback_min: int, fallback_max: int) -> Tuple[int, int]:
-    """Learn lower/upper bounds for a tag count from pooled stats."""
+    """Derive lower and upper count bounds for a tag from historical deck stats.
+
+    Args:
+        pooled: List of deck stat dicts from pool_stats_for_commander.
+        tag: Gameplay tag to compute bounds for (e.g. 'removal').
+        gen: Generation config providing tag quantile parameters.
+        fallback_min: Minimum count to fall back to if data is insufficient.
+        fallback_max: Maximum count to fall back to if data is insufficient.
+
+    Returns:
+        A tuple of (lower_bound, upper_bound) for the tag count.
+    """
     vals = [int(extract_tag_count(s, tag)) for s in pooled]
     a = np.asarray(vals, dtype=np.float32)
     lo = int(np.quantile(a, float(gen.tag_min_q)))
@@ -89,7 +123,15 @@ def learn_tag_bounds(pooled: List[dict], tag: str, gen: GenConfig, fallback_min:
 
 
 def learn_ramp_target(pooled: List[dict], gen: GenConfig) -> int:
-    """Learn preferred ramp count from pooled deck statistics."""
+    """Derive the preferred ramp card count from historical deck stats.
+
+    Args:
+        pooled: List of deck stat dicts from pool_stats_for_commander.
+        gen: Generation config providing ramp quantile and clamp parameters.
+
+    Returns:
+        Target ramp card count clamped to [ramp_min, ramp_max].
+    """
     vals = [int(extract_tag_count(s, gen.ramp_tag)) for s in pooled]
     a = np.asarray(vals, dtype=np.float32)
     t = int(np.quantile(a, float(gen.ramp_q)))
@@ -116,7 +158,15 @@ class CommanderCache:
 
 
 def compute_color_legality(assets: DeckGenAssets, commander_index: int) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-    """Compute per-node commander color legality and color masks."""
+    """Compute per-node color legality masks relative to a commander's color identity.
+
+    Args:
+        assets: Pre-loaded DeckGenAssets.
+        commander_index: Graph node index of the commander.
+
+    Returns:
+        A tuple of (illegal_by_color, card_colors, commander_colors) boolean tensors.
+    """
     commander_colors = assets.color_identity_mask[commander_index].clone()
 
     if "C" in CardFields.color_identities():
@@ -141,14 +191,31 @@ def compute_color_legality(assets: DeckGenAssets, commander_index: int) -> Tuple
 
 
 def compute_allowed_basic_tensor(node_names: List[str], allowed_basics: List[str], device: torch.device) -> torch.Tensor:
-    """Return node indices corresponding to allowed basic land names."""
+    """Return a tensor of node indices for allowed basic land names.
+
+    Args:
+        node_names: Ordered list of card names corresponding to graph nodes.
+        allowed_basics: List of basic land names permitted by color identity.
+        device: Torch device to place the tensor on.
+
+    Returns:
+        Long tensor of node indices for allowed basics, or empty tensor if none.
+    """
     allowed_set = {b.lower() for b in allowed_basics}
     idxs = [i for i, name in enumerate(node_names) if name.strip().lower() in allowed_set]
     return torch.tensor(idxs, dtype=torch.long, device=device) if idxs else torch.empty((0,), dtype=torch.long, device=device)
 
 
 def build_basic_targets_by_type(allowed_basics: List[str], basics_target: int) -> Dict[str, int]:
-    """Distribute desired basic land count across allowed basic types."""
+    """Distribute the basics target count evenly across allowed basic land types.
+
+    Args:
+        allowed_basics: List of allowed basic land names.
+        basics_target: Total number of basic lands to distribute.
+
+    Returns:
+        Dict mapping each basic land type to its target count.
+    """
     types = [b for b in allowed_basics if b]
     if not types:
         return {}
@@ -164,7 +231,18 @@ def build_basic_targets_by_type(allowed_basics: List[str], basics_target: int) -
 
 
 def build_commander_cache(assets: DeckGenAssets, commander_name: str, commander_index: int, node_embeddings: torch.Tensor, gen: GenConfig) -> CommanderCache:
-    """Compute reusable commander-specific targets and legality masks."""
+    """Compute and return all commander-specific generation targets and masks.
+
+    Args:
+        assets: Pre-loaded DeckGenAssets.
+        commander_name: Canonical name of the commander card.
+        commander_index: Graph node index of the commander.
+        node_embeddings: Node embedding matrix of shape (N, node_dim).
+        gen: Generation config.
+
+    Returns:
+        A CommanderCache with learned targets and pre-computed legality masks.
+    """
     pooled = pool_stats_for_commander(
         commander_name=commander_name,
         commander_index=commander_index,
@@ -208,10 +286,18 @@ def build_commander_cache(assets: DeckGenAssets, commander_name: str, commander_
 
 
 class DeckState:
-    """Mutable generation state tracked while constructing a deck."""
+    """Mutable state accumulator for a single deck construction run."""
 
     def __init__(self, deck_indices: List[int], nonbasic_already_picked: torch.Tensor) -> None:
-        """Initialize counters and cached values for one generation run."""
+        """Initialize mutable generation state for one deck construction run.
+
+        Args:
+            deck_indices: Starting list of picked node indices (typically [commander_index]).
+            nonbasic_already_picked: Boolean tensor tracking picked non-basic cards.
+
+        Returns:
+            None
+        """
         self.deck_indices = deck_indices
         self.nonbasic_already_picked = nonbasic_already_picked
 
@@ -227,10 +313,23 @@ class DeckState:
 
 
 class DeckGenerator:
-    """Generate a deck list for a commander using model scores and constraints."""
+    """Autoregressive sampler that builds a deck card-by-card using GNN scores."""
 
     def __init__(self, model: CommanderDeckGNN, assets: DeckGenAssets, commander_name: str, gen: GenConfig, allow_duplicates: bool, node_embeddings: Optional[torch.Tensor] = None, commander_cache: Optional[CommanderCache] = None):
-        """Prepare model state, targets, masks, and helper caches."""
+        """Prepare model state, targets, and pre-computed masks for generation.
+
+        Args:
+            model: Trained CommanderDeckGNN in eval mode.
+            assets: Pre-loaded DeckGenAssets.
+            commander_name: Canonical name of the commander card.
+            gen: Generation hyperparameters.
+            allow_duplicates: If True, non-basic cards may be picked more than once.
+            node_embeddings: Optional pre-computed node embeddings; computed if None.
+            commander_cache: Optional pre-computed CommanderCache; built if None.
+
+        Returns:
+            None
+        """
         self.model = model
         self.assets = assets
         self.commander_name = commander_name
@@ -270,12 +369,11 @@ class DeckGenerator:
         )
         self.land_is_legal = self.assets.is_land_node & ~self.illegal_by_color
 
-        # lands with 2+ colors in identity
+        # lands with 2+ colors in identity get classified as fixing lands
         color_counts = self.card_colors.float().sum(dim=1)
         self.is_fixing_land = self.assets.is_land_node & ~self.is_basic_node & (color_counts >= 2.0)
         self.is_utility_land = self.assets.is_land_node & ~self.is_basic_node & ~self.is_fixing_land
 
-        # Allowed basics + per-type targets
         self.allowed_basics = cache.allowed_basics
         self.allowed_basic_tensor = cache.allowed_basic_tensor
         self.basic_targets_by_land_type = cache.basic_targets_by_land_type
@@ -315,7 +413,14 @@ class DeckGenerator:
                 self.strategy_tag_nodes[t] = torch.tensor(idxs, device=self.device, dtype=torch.long)
 
     def build_tag_mask(self, tag: str) -> torch.Tensor:
-        """Create a boolean node mask for cards containing a given tag."""
+        """Create a boolean node mask for cards that have a given tag.
+
+        Args:
+            tag: Gameplay tag string to match against the tag map.
+
+        Returns:
+            Boolean tensor of shape (N,) where True marks nodes with the tag.
+        """
         mask = torch.zeros((self.num_nodes,), dtype=torch.bool, device=self.device)
         for i, name in enumerate(self.assets.node_names):
             if tag in self.tag_map.get(name, []):
@@ -323,19 +428,48 @@ class DeckGenerator:
         return mask
 
     def compute_color_legality(self) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-        """Compute per-node commander color legality and color masks."""
+        """Compute per-node color legality masks for this generator's commander.
+
+        Args:
+            None
+
+        Returns:
+            A tuple of (illegal_by_color, card_colors, commander_colors).
+        """
         return compute_color_legality(self.assets, self.commander_index)
 
     def compute_allowed_basic_tensor(self, allowed_basics: List[str]) -> torch.Tensor:
-        """Return node indices corresponding to allowed basic land names."""
+        """Return node indices for allowed basic land names on this device.
+
+        Args:
+            allowed_basics: List of basic land names permitted by color identity.
+
+        Returns:
+            Long tensor of allowed basic node indices.
+        """
         return compute_allowed_basic_tensor(self.assets.node_names, allowed_basics, self.device)
 
     def build_basic_targets_by_type(self, allowed_basics: List[str], basics_target: int) -> Dict[str, int]:
-        """Distribute desired basic land count across allowed basic types."""
+        """Distribute the basics target count across allowed basic land types.
+
+        Args:
+            allowed_basics: List of allowed basic land names.
+            basics_target: Total basic land count to distribute.
+
+        Returns:
+            Dict mapping each basic land type to its target count.
+        """
         return build_basic_targets_by_type(allowed_basics, basics_target)
 
     def candidate_pool(self, last_picked: int) -> torch.Tensor:
-        """Build the candidate node pool from neighbors and random exploration."""
+        """Build a candidate node pool from neighbors of commander and last-picked card.
+
+        Args:
+            last_picked: Node index of the most recently picked card.
+
+        Returns:
+            Long tensor of candidate node indices, deduplicated and budget-capped.
+        """
         pools: List[torch.Tensor] = []
 
         cmd_neigh = self.neighbors_by_node[self.commander_index]
@@ -360,7 +494,16 @@ class DeckGenerator:
         return cand.long()
 
     def apply_land_pressure(self, logits: torch.Tensor, state: DeckState, cand: torch.Tensor) -> None:
-        """Adjust logits to steer land counts and basic-land composition."""
+        """Adjust candidate logits to steer land counts and basic land composition.
+
+        Args:
+            logits: Float tensor of scores for each candidate (modified in-place).
+            state: Current mutable deck state.
+            cand: Long tensor of candidate node indices.
+
+        Returns:
+            None
+        """
         land = self.assets.is_land_node[cand]
         if state.lands_picked < self.land_target:
             logits[land] += float(self.gen.land_boost)
@@ -401,7 +544,16 @@ class DeckGenerator:
                     logits[mask] -= pen
 
     def apply_curve_pressure(self, logits: torch.Tensor, state: DeckState, cand: torch.Tensor) -> None:
-        """Penalize overfilled mana-curve buckets in current candidates."""
+        """Penalize candidates in overfilled mana-curve buckets.
+
+        Args:
+            logits: Float tensor of scores for each candidate (modified in-place).
+            state: Current mutable deck state.
+            cand: Long tensor of candidate node indices.
+
+        Returns:
+            None
+        """
         mv = self.assets.mana_value_by_node[cand]
         bins = torch.clamp(mv.round().long(), min=0, max=6)
         for b in range(7):
@@ -411,7 +563,16 @@ class DeckGenerator:
                 logits[bins == b] -= float(self.gen.curve_penalty)
 
     def apply_ramp_pressure(self, logits: torch.Tensor, state: DeckState, cand: torch.Tensor) -> None:
-        """Penalize ramp-tag cards once learned ramp targets are exceeded."""
+        """Penalize ramp-tagged candidates once learned ramp targets are exceeded.
+
+        Args:
+            logits: Float tensor of scores for each candidate (modified in-place).
+            state: Current mutable deck state.
+            cand: Long tensor of candidate node indices.
+
+        Returns:
+            None
+        """
         is_ramp = self.is_ramp_node[cand]
         if state.ramp_count > (self.ramp_target + int(self.gen.ramp_hard_buffer)):
             logits[is_ramp] -= float(self.gen.ramp_hard_penalty)
@@ -419,7 +580,16 @@ class DeckGenerator:
             logits[is_ramp] -= float(self.gen.ramp_soft_penalty)
 
     def apply_common_tag_pressure(self, logits: torch.Tensor, state: DeckState, cand: torch.Tensor) -> None:
-        """Apply soft/hard penalties for common tag overrepresentation."""
+        """Apply soft and hard penalties for overrepresented common gameplay tags.
+
+        Args:
+            logits: Float tensor of scores for each candidate (modified in-place).
+            state: Current mutable deck state.
+            cand: Long tensor of candidate node indices.
+
+        Returns:
+            None
+        """
         for tp in self.gen.common_tag_penalties:
             mask = self.common_tag_masks[tp.tag][cand]
             lo, hi = self.common_tag_bounds[tp.tag]
@@ -433,7 +603,14 @@ class DeckGenerator:
                 logits[mask] += 0.15
 
     def update_strategy_tags(self, state: DeckState) -> None:
-        """Update dominant strategy tags from observed tag counts so far."""
+        """Update the dominant strategy tags from observed tag counts so far.
+
+        Args:
+            state: Current mutable deck state (dominant_strategy_tags updated in-place).
+
+        Returns:
+            None
+        """
         start_after = 10
         topn = 3
 
@@ -443,7 +620,14 @@ class DeckGenerator:
             state.dominant_strategy_tags = [t for t, _ in scored[:topn]]
 
     def strategy_centroid(self, state: DeckState) -> Optional[torch.Tensor]:
-        """Return cached centroid embedding for dominant strategy tags."""
+        """Return a cached mean embedding for the current dominant strategy tags.
+
+        Args:
+            state: Current mutable deck state providing dominant_strategy_tags.
+
+        Returns:
+            Float tensor of shape (node_dim,), or None if no strategy tags are active.
+        """
         if not state.dominant_strategy_tags:
             return None
 
@@ -468,14 +652,30 @@ class DeckGenerator:
         return centroid
 
     def base_logits(self, cand: torch.Tensor, state_vec: torch.Tensor) -> torch.Tensor:
-        """Score candidates and mask out illegal-by-color cards."""
+        """Score candidates with the policy head and mask out color-illegal cards.
+
+        Args:
+            cand: Long tensor of candidate node indices.
+            state_vec: Current generation state vector from the policy head.
+
+        Returns:
+            Float tensor of logits with illegal-by-color candidates set to -1e9.
+        """
         cand = cand.long()
         logits = self.model.policy.score_candidates(self.node_embeddings, state_vec, cand).float()
         logits[self.illegal_by_color[cand]] = -1e9
         return logits
 
     def pick(self, cand: torch.Tensor, logits: torch.Tensor) -> Tuple[int, float]:
-        """Sample a node from top-k logits using temperature-scaled softmax."""
+        """Sample one candidate from top-k logits using temperature-scaled softmax.
+
+        Args:
+            cand: Long tensor of candidate node indices.
+            logits: Float tensor of scores aligned with cand.
+
+        Returns:
+            A tuple of (picked_node_index, picked_logit_value).
+        """
         k = min(int(self.gen.top_k), int(cand.numel()))
         if k <= 0:
             raise RuntimeError("Empty candidate set")
@@ -489,7 +689,14 @@ class DeckGenerator:
         return pick_idx, pick_logit
 
     def run(self) -> List[int]:
-        """Run iterative sampling until deck size is reached or stalled."""
+        """Iteratively sample cards until deck_size is reached or no candidates remain.
+
+        Args:
+            None
+
+        Returns:
+            List of node indices (including commander) representing the generated deck.
+        """
         nonbasic_already = torch.zeros((self.num_nodes,), dtype=torch.bool, device=self.device)
         state = DeckState(deck_indices=[self.commander_index], nonbasic_already_picked=nonbasic_already)
 
@@ -556,7 +763,21 @@ class DeckGenerator:
 
 
 def generate_deck(model: CommanderDeckGNN, assets: DeckGenAssets, commander_name: str, gen: GenConfig, allow_duplicates: bool = False, node_embeddings: Optional[torch.Tensor] = None, commander_cache: Optional[CommanderCache] = None) -> Tuple[Dict[str, int], Dict[str, Any]]:
-    """Generate a deck and return name counts plus summary stats."""
+    """Generate a deck and return card counts and summary statistics.
+
+    Args:
+        model: Trained CommanderDeckGNN in eval mode.
+        assets: Pre-loaded DeckGenAssets.
+        commander_name: Canonical name of the commander card.
+        gen: Generation hyperparameters.
+        allow_duplicates: If True, non-basic cards may appear more than once.
+        node_embeddings: Optional pre-computed node embeddings.
+        commander_cache: Optional pre-computed CommanderCache.
+
+    Returns:
+        A tuple of (card_counts, stats) where card_counts maps card name to quantity
+        and stats contains summary metadata about the generated deck.
+    """
     g = DeckGenerator(
         model=model,
         assets=assets,

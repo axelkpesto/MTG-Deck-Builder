@@ -6,6 +6,9 @@
   const appShell = document.getElementById("appShell");
   if (!loginShell || !appShell) return;
 
+  const CARD_PEEK = 36;
+  const CARD_FULL = 340;
+
   const CATEGORY_ORDER = [
     "Commander",
     "Creature",
@@ -36,7 +39,7 @@
     user: null,
     cards: [],
     deckTitle: "",
-    sortBy: "category",
+    viewMode: "stack",
     filterCategory: "",
     search: "",
     commander: "",
@@ -54,11 +57,23 @@
     commander: document.getElementById("commander"),
     generateBtn: document.getElementById("generateBtn"),
     completeBtn: document.getElementById("completeBtn"),
+    importToggleBtn: document.getElementById("importToggleBtn"),
+    importCloseBtn: document.getElementById("importCloseBtn"),
+    importModal: document.getElementById("importModal"),
     importCards: document.getElementById("importCards"),
+    importFile: document.getElementById("importFile"),
+    importFailed: document.getElementById("importFailed"),
     importBtn: document.getElementById("importBtn"),
+    downloadBtn: document.getElementById("downloadBtn"),
+    exportModal: document.getElementById("exportModal"),
+    exportModalClose: document.getElementById("exportModalClose"),
+    exportCloseFooter: document.getElementById("exportCloseFooter"),
+    exportTxtBtn: document.getElementById("exportTxtBtn"),
+    exportCsvBtn: document.getElementById("exportCsvBtn"),
     saveBtn: document.getElementById("saveBtn"),
     searchInput: document.getElementById("searchInput"),
-    sortSelect: document.getElementById("sortSelect"),
+    viewStack: document.getElementById("viewStack"),
+    viewList: document.getElementById("viewList"),
     filterSelect: document.getElementById("filterSelect"),
     deckBoard: document.getElementById("deckBoard"),
     cardCount: document.getElementById("cardCount"),
@@ -116,6 +131,12 @@
   }
 
   async function getSession() {
+    const meta = document.querySelector('meta[name="app-session"]');
+    if (meta) {
+      const data = JSON.parse(meta.content);
+      meta.remove();
+      return data;
+    }
     const res = await fetch("/session.php", { method: "GET" });
     if (!res.ok) throw new Error(`Session check failed: ${res.status}`);
     return res.json();
@@ -448,7 +469,6 @@
       renderSummaryMetric("Basics", lands.basic_count || 0),
     );
 
-    // Cost bar: segmented by color
     if (els.costBar) {
       els.costBar.innerHTML = "";
       const totalPct = ["W", "U", "B", "R", "G"].reduce(
@@ -474,7 +494,6 @@
       }
     }
 
-    // Production bar: segmented by basic land color
     if (els.productionBar) {
       els.productionBar.innerHTML = "";
       if (totalProduction > 0) {
@@ -592,26 +611,6 @@
     });
   }
 
-  function compareCards(a, b) {
-    if (state.sortBy === "name") {
-      return a.name.localeCompare(b.name);
-    }
-    if (state.sortBy === "quantity") {
-      return b.quantity - a.quantity || a.name.localeCompare(b.name);
-    }
-    if (state.sortBy === "tag") {
-      return (
-        formatTag(a.primaryTag).localeCompare(formatTag(b.primaryTag)) ||
-        a.name.localeCompare(b.name)
-      );
-    }
-    const ag = getCardGroup(a);
-    const bg = getCardGroup(b);
-    if (ag === "Commander" && bg !== "Commander") return -1;
-    if (bg === "Commander" && ag !== "Commander") return 1;
-    return ag.localeCompare(bg) || a.name.localeCompare(b.name);
-  }
-
   function getDisplayCards() {
     let list = state.cards.slice();
     if (state.search) {
@@ -621,7 +620,6 @@
     if (state.filterCategory) {
       list = list.filter((card) => getCardGroup(card) === state.filterCategory);
     }
-    list.sort(compareCards);
     return list;
   }
 
@@ -658,14 +656,14 @@
     const quantity = Math.max(1, Math.floor(Number(nextValue) || 1));
     card.quantity = quantity;
     updateCounts();
-    renderDeckBoard();
+    renderDeck();
     scheduleAnalysis(true);
   }
 
   function removeCard(card) {
     state.cards = state.cards.filter((item) => item.id !== card.id);
     renderCategoryFilter();
-    renderDeckBoard();
+    renderDeck();
     scheduleAnalysis(true);
   }
 
@@ -709,16 +707,27 @@
     });
     cardEl.appendChild(removeBtn);
 
-    cardEl.addEventListener("mouseenter", () =>
-      cardEl.classList.add("is-active"),
-    );
-    cardEl.addEventListener("mouseleave", () =>
-      cardEl.classList.remove("is-active"),
-    );
-    cardEl.addEventListener("focusin", () => cardEl.classList.add("is-active"));
-    cardEl.addEventListener("focusout", () =>
-      cardEl.classList.remove("is-active"),
-    );
+    function activateStackCard() {
+      cardEl.classList.add("is-active");
+      const siblings = Array.from(cardEl.parentNode.children);
+      const myIndex = siblings.indexOf(cardEl);
+      for (let j = myIndex + 1; j < siblings.length; j++) {
+        siblings[j].style.top = `${j * CARD_PEEK + (CARD_FULL - CARD_PEEK)}px`;
+      }
+    }
+    function deactivateStackCard() {
+      cardEl.classList.remove("is-active");
+      const siblings = Array.from(cardEl.parentNode.children);
+      const myIndex = siblings.indexOf(cardEl);
+      for (let j = myIndex + 1; j < siblings.length; j++) {
+        siblings[j].style.top = `${j * CARD_PEEK}px`;
+      }
+    }
+
+    cardEl.addEventListener("mouseenter", activateStackCard);
+    cardEl.addEventListener("mouseleave", deactivateStackCard);
+    cardEl.addEventListener("focusin", activateStackCard);
+    cardEl.addEventListener("focusout", deactivateStackCard);
     cardEl.addEventListener("click", () => {
       loadCardMeta(card.name).then((meta) => openCardModal(card, meta));
     });
@@ -740,8 +749,89 @@
     return cardEl;
   }
 
+  function renderDeck() {
+    if (state.viewMode === "list") {
+      renderDeckList();
+    } else {
+      renderDeckBoard();
+    }
+  }
+
+  function renderDeckList() {
+    if (!els.deckBoard) return;
+    const displayCards = getDisplayCards()
+      .slice()
+      .sort((a, b) => {
+        const ag = getCardGroup(a),
+          bg = getCardGroup(b);
+        if (ag === "Commander") return -1;
+        if (bg === "Commander") return 1;
+        return ag.localeCompare(bg) || a.name.localeCompare(b.name);
+      });
+
+    els.deckBoard.innerHTML = "";
+    els.deckBoard.className = "deck-list";
+
+    displayCards.forEach((card) => {
+      const row = document.createElement("div");
+      row.className = "deck-list-row";
+
+      const qty = document.createElement("span");
+      qty.className = "deck-list-qty";
+      qty.textContent = card.quantity;
+
+      const name = document.createElement("button");
+      name.className = "deck-list-name";
+      name.type = "button";
+      name.textContent = card.name;
+      name.addEventListener("click", () =>
+        loadCardMeta(card.name).then((meta) => openCardModal(card, meta)),
+      );
+
+      const tag = document.createElement("span");
+      tag.className = "deck-list-tag";
+      tag.textContent = getCardGroup(card);
+
+      const actions = document.createElement("div");
+      actions.className = "deck-list-actions";
+
+      const minusBtn = document.createElement("button");
+      minusBtn.type = "button";
+      minusBtn.className = "deck-list-action-btn";
+      minusBtn.textContent = "−";
+      minusBtn.addEventListener("click", () =>
+        updateCardQuantity(card, card.quantity - 1),
+      );
+
+      const plusBtn = document.createElement("button");
+      plusBtn.type = "button";
+      plusBtn.className = "deck-list-action-btn";
+      plusBtn.textContent = "+";
+      plusBtn.addEventListener("click", () =>
+        updateCardQuantity(card, card.quantity + 1),
+      );
+
+      const removeBtn = document.createElement("button");
+      removeBtn.type = "button";
+      removeBtn.className = "deck-list-action-btn deck-list-remove";
+      removeBtn.textContent = "×";
+      removeBtn.addEventListener("click", () => removeCard(card));
+
+      actions.appendChild(minusBtn);
+      actions.appendChild(plusBtn);
+      actions.appendChild(removeBtn);
+
+      row.appendChild(qty);
+      row.appendChild(name);
+      row.appendChild(tag);
+      row.appendChild(actions);
+      els.deckBoard.appendChild(row);
+    });
+  }
+
   function renderDeckBoard() {
     if (!els.deckBoard) return;
+    els.deckBoard.className = "deck-board";
     const grouped = new Map();
     getDisplayCards().forEach((card) => {
       const group = getCardGroup(card);
@@ -777,17 +867,14 @@
 
       const imageStack = document.createElement("div");
       imageStack.className = "column-image-stack";
-      const cardNodes = sortedCards.map((card, index) =>
-        createStackCard(card, index),
-      );
-      cardNodes.forEach((node) => imageStack.appendChild(node));
-
-      const PEEK = 36; // px visible per card
-      cardNodes.forEach((node, index) => {
-        node.style.top = `${index * PEEK}px`;
-        node.style.zIndex = String(10 + index);
+      imageStack.style.height = `${(sortedCards.length - 1) * CARD_PEEK + CARD_FULL}px`;
+      const cardNodes = sortedCards.map((card, index) => {
+        const node = createStackCard(card, index);
+        node.style.top = `${index * CARD_PEEK}px`;
+        node.style.zIndex = String(index + 1);
+        return node;
       });
-      imageStack.style.minHeight = `${(sortedCards.length - 1) * PEEK + 340}px`;
+      cardNodes.forEach((node) => imageStack.appendChild(node));
 
       column.appendChild(header);
       column.appendChild(imageStack);
@@ -859,9 +946,9 @@
       tagData.predicted_scores || tagData.scores,
     );
     const resolvedName =
-      typeof meta.card_name === "string" && meta.card_name.trim()
-        ? meta.card_name.trim()
-        : item.name;
+      (typeof meta.Name === "string" && meta.Name.trim()) ||
+      (typeof meta.card_name === "string" && meta.card_name.trim()) ||
+      item.name;
     const normalizedMeta = normalizeMeta(
       resolvedName,
       meta,
@@ -1002,10 +1089,10 @@
         method: "POST",
         body: { id: commander },
       });
-      const deckCounts = Array.isArray(data) ? data[0] : data;
-      if (!deckCounts || typeof deckCounts !== "object") {
+      if (!Array.isArray(data) || !data[0] || typeof data[0] !== "object") {
         throw new Error("Unexpected generate_deck response format");
       }
+      const deckCounts = data[0];
 
       state.currentDeckId = "";
       state.cards = [
@@ -1027,7 +1114,31 @@
       });
 
       const enriched = await enrichCards(generatedCards);
-      enriched.cards.forEach((card) => {
+
+      if (!state.metaCache[commander]) {
+        await hydrateMetaForNames([commander]);
+      }
+      const commanderMeta = state.metaCache[commander];
+      const commanderColorRaw = parseListString(
+        commanderMeta?.raw?.["Color Identity"] || [],
+      );
+      const commanderColors = new Set(
+        commanderColorRaw.map((c) => c.toUpperCase()),
+      );
+
+      const colorFiltered =
+        commanderMeta?.raw?.["Color Identity"] !== undefined
+          ? enriched.cards.filter((card) => {
+              const meta = state.metaCache[card.name];
+              if (!meta?.raw?.["Color Identity"]) return true;
+              const cardColors = parseListString(meta.raw["Color Identity"])
+                .map((c) => c.toUpperCase())
+                .filter((c) => c !== "C");
+              return cardColors.every((c) => commanderColors.has(c));
+            })
+          : enriched.cards;
+
+      colorFiltered.forEach((card) => {
         state.cards.push({
           id: uid(),
           name: card.name,
@@ -1038,7 +1149,7 @@
       });
 
       renderCategoryFilter();
-      renderDeckBoard();
+      renderDeck();
       await runAnalysis({ showBusy: false });
       setStatus("Deck generated and analyzed.", "success");
     } catch (err) {
@@ -1095,7 +1206,7 @@
       }
 
       renderCategoryFilter();
-      renderDeckBoard();
+      renderDeck();
       scheduleAnalysis(true);
       setStatus(`Added ${additions.length} similar cards.`, "success");
     } catch (err) {
@@ -1107,12 +1218,21 @@
   }
 
   async function importCards() {
-    const lines = els.importCards.value.split(/\r?\n/);
+    let text = "";
+    if (els.importFile && els.importFile.files && els.importFile.files[0]) {
+      text = await els.importFile.files[0].text();
+    } else {
+      text = els.importCards ? els.importCards.value : "";
+    }
+
+    const lines = text.split(/\r?\n/);
     const parsed = lines.map(parseImportLine).filter(Boolean);
     if (parsed.length === 0) {
       setStatus("No cards to import.", "error");
       return;
     }
+
+    if (els.importFailed) els.importFailed.hidden = true;
 
     setBusy(true, "Validating cards...");
     try {
@@ -1131,20 +1251,84 @@
       if (validCards.length > 0) {
         mergeCards(validCards);
         ensureCommanderCardListed();
-        els.importCards.value = "";
+        if (els.importCards) els.importCards.value = "";
+        if (els.importFile) els.importFile.value = "";
         renderCategoryFilter();
-        renderDeckBoard();
+        renderDeck();
         await runAnalysis({ showBusy: false });
       }
 
       if (invalidNames.length > 0) {
-        setStatus(`Skipped invalid cards: ${invalidNames.join(", ")}`, "error");
+        setStatus(
+          `Imported ${validCards.length} card(s). ${invalidNames.length} not found.`,
+          validCards.length > 0 ? "success" : "error",
+        );
+        if (els.importFailed) {
+          els.importFailed.hidden = false;
+          els.importFailed.innerHTML =
+            `<strong>Cards not found (${invalidNames.length}):</strong>` +
+            invalidNames.map((n) => `<div>${n}</div>`).join("");
+        }
       } else {
-        setStatus(`Imported ${validCards.length} cards.`, "success");
+        setStatus(`Imported ${validCards.length} card(s).`, "success");
+        if (els.importFailed) els.importFailed.hidden = true;
       }
     } finally {
       setBusy(false);
     }
+  }
+
+  function downloadFile(content, filename, mimeType) {
+    const blob = new Blob([content], { type: mimeType });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }
+
+  function exportDeckTxt() {
+    if (state.cards.length === 0) {
+      setStatus("No cards to export.", "error");
+      return;
+    }
+    const commander = getCommander();
+    const lines = [];
+    if (commander) lines.push(`1 x ${commander}`);
+    state.cards
+      .filter((c) => c.name.toLowerCase() !== commander.toLowerCase())
+      .sort((a, b) => a.name.localeCompare(b.name))
+      .forEach((card) => lines.push(`${card.quantity} x ${card.name}`));
+    const title =
+      getDeckTitle()
+        .replace(/[^\w\s-]/g, "")
+        .trim() || "deck";
+    downloadFile(lines.join("\n"), `${title}.txt`, "text/plain");
+  }
+
+  function exportDeckCsv() {
+    if (state.cards.length === 0) {
+      setStatus("No cards to export.", "error");
+      return;
+    }
+    const commander = getCommander();
+    const esc = (v) => `"${String(v).replace(/"/g, '""')}"`;
+    const rows = [["Quantity", "Card Name"].map(esc).join(",")];
+    if (commander) rows.push([esc("1"), esc(commander)].join(","));
+    state.cards
+      .filter((c) => c.name.toLowerCase() !== commander.toLowerCase())
+      .sort((a, b) => a.name.localeCompare(b.name))
+      .forEach((card) =>
+        rows.push([esc(String(card.quantity)), esc(card.name)].join(",")),
+      );
+    const title =
+      getDeckTitle()
+        .replace(/[^\w\s-]/g, "")
+        .trim() || "deck";
+    downloadFile(rows.join("\n"), `${title}.csv`, "text/csv");
   }
 
   function buildPersistedDeck() {
@@ -1258,7 +1442,7 @@
     ensureCommanderCardListed();
     await hydrateMetaForNames(state.cards.map((card) => card.name));
     renderCategoryFilter();
-    renderDeckBoard();
+    renderDeck();
     await runAnalysis({ showBusy: false });
     setStatus("Saved deck loaded.", "success");
   }
@@ -1403,17 +1587,14 @@
     const raw = meta.raw || {};
     const imageUrl = imageUrlFromMeta(meta);
 
-    // Image
     els.cardModalImage.src = imageUrl || "";
     els.cardModalImage.alt = card.name;
 
-    // Name + CMC
     els.cardModalName.textContent = meta.name || card.name;
     const cmc = raw["Mana Cost"] ?? raw.mana_cost ?? "";
     els.cardModalCmc.textContent = cmc !== "" ? `CMC ${cmc}` : "";
     els.cardModalCmc.hidden = cmc === "";
 
-    // Type line
     const supertypes = parseListString(raw.Supertypes || raw.supertypes || []);
     const types = parseListString(raw.Types || raw.types || []);
     const subtypes = parseListString(raw.Subtypes || raw.subtypes || []);
@@ -1425,7 +1606,6 @@
       .join(" ");
     els.cardModalTypeline.textContent = typeStr || "—";
 
-    // Badges: color identity + rarity
     els.cardModalBadges.innerHTML = "";
     const colors = parseListString(
       raw["Color Identity"] || raw.color_identity || [],
@@ -1451,13 +1631,11 @@
       els.cardModalBadges.appendChild(rb);
     }
 
-    // Oracle text — loading state while we fetch from Scryfall
     els.cardModalOracle.textContent = "Loading card text…";
     els.cardModalOracle.classList.add("is-loading");
     els.cardModalFlavor.textContent = "";
     els.cardModalPT.textContent = "";
 
-    // Remove handler
     els.cardModalRemove.onclick = () => {
       removeCard(card);
       els.cardModal.close();
@@ -1465,7 +1643,6 @@
 
     els.cardModal.showModal();
 
-    // Fetch Scryfall data for oracle text + P/T
     if (meta.cardId) {
       fetchScryfallCard(meta.cardId).then((sf) => {
         els.cardModalOracle.classList.remove("is-loading");
@@ -1498,8 +1675,54 @@
   function bindBuilderEvents() {
     els.generateBtn.addEventListener("click", generateDeck);
     els.completeBtn.addEventListener("click", completeDeck);
-    els.importBtn.addEventListener("click", importCards);
     els.saveBtn.addEventListener("click", saveDeck);
+    els.importBtn.addEventListener("click", importCards);
+
+    // Import modal
+    if (els.importToggleBtn && els.importModal) {
+      els.importToggleBtn.addEventListener("click", () =>
+        els.importModal.showModal(),
+      );
+    }
+    if (els.importCloseBtn && els.importModal) {
+      els.importCloseBtn.addEventListener("click", () =>
+        els.importModal.close(),
+      );
+    }
+    if (els.importModal) {
+      els.importModal.addEventListener("click", (e) => {
+        if (e.target === els.importModal) els.importModal.close();
+      });
+    }
+
+    // Export modal
+    if (els.downloadBtn && els.exportModal) {
+      els.downloadBtn.addEventListener("click", () =>
+        els.exportModal.showModal(),
+      );
+    }
+    const closeExportModal = () => els.exportModal && els.exportModal.close();
+    if (els.exportModalClose)
+      els.exportModalClose.addEventListener("click", closeExportModal);
+    if (els.exportCloseFooter)
+      els.exportCloseFooter.addEventListener("click", closeExportModal);
+    if (els.exportModal) {
+      els.exportModal.addEventListener("click", (e) => {
+        if (e.target === els.exportModal) els.exportModal.close();
+      });
+    }
+    if (els.exportTxtBtn) {
+      els.exportTxtBtn.addEventListener("click", () => {
+        exportDeckTxt();
+        closeExportModal();
+      });
+    }
+    if (els.exportCsvBtn) {
+      els.exportCsvBtn.addEventListener("click", () => {
+        exportDeckCsv();
+        closeExportModal();
+      });
+    }
 
     els.commander.addEventListener("change", () => {
       state.commander = els.commander.value.trim();
@@ -1508,15 +1731,20 @@
     });
     els.searchInput.addEventListener("input", () => {
       state.search = els.searchInput.value.trim();
-      renderDeckBoard();
+      renderDeck();
     });
-    els.sortSelect.addEventListener("change", () => {
-      state.sortBy = els.sortSelect.value;
-      renderDeckBoard();
+    [els.viewStack, els.viewList].forEach((btn) => {
+      if (!btn) return;
+      btn.addEventListener("click", () => {
+        state.viewMode = btn === els.viewStack ? "stack" : "list";
+        els.viewStack.classList.toggle("is-active", state.viewMode === "stack");
+        els.viewList.classList.toggle("is-active", state.viewMode === "list");
+        renderDeck();
+      });
     });
     els.filterSelect.addEventListener("change", () => {
       state.filterCategory = els.filterSelect.value;
-      renderDeckBoard();
+      renderDeck();
     });
   }
 
@@ -1524,7 +1752,7 @@
     bindBuilderEvents();
     bindModalEvents();
     renderCategoryFilter();
-    renderDeckBoard();
+    renderDeck();
     renderAnalysis();
     updateDeckHeader();
 

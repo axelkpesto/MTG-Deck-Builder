@@ -3,8 +3,9 @@ import json
 from collections import defaultdict
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[2]
 from backend.config.config import CONFIG
+
+ROOT = Path(__file__).resolve().parents[2]
 
 
 def image_url_from_scryfall_id(card_id: str) -> str:

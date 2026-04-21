@@ -2,6 +2,7 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/../config.php';
+require_once __DIR__ . '/apikeys.php';
 
 app_start_session();
 $cfg = app_config();
@@ -71,6 +72,20 @@ $_SESSION['user'] = [
     'name' => $user['name'] ?? '',
 ];
 $_SESSION['oauth_access_token'] = $accessToken;
+
+$userEmail = (string)($user['email'] ?? '');
+$pepper    = (string)(getenv('API_KEY_PEPPER') ?: '');
+if ($userEmail !== '' && $pepper !== '') {
+    try {
+        $userApiKey = apikeys_register($userEmail, $pepper);
+        $_SESSION['user_api_key'] = $userApiKey;
+    } catch (Throwable $e) {
+        error_log('API key registration failed: ' . $e->getMessage());
+        // Non-fatal: user can still browse without a personal API key.
+    }
+}
+unset($userEmail, $pepper);
+
 session_regenerate_id(true);
 session_write_close();
 

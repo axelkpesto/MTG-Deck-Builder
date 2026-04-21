@@ -18,5 +18,6 @@ $params = http_build_query([
     'prompt' => 'select_account consent',
 ]);
 
+session_write_close();
 header('Location: ' . $cfg['oauth_authorize_url'] . '?' . $params);
 exit;

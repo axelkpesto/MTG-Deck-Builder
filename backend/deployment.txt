@@ -17,6 +17,7 @@ google-api-core==2.29.0
 google-auth==2.48.0
 google-cloud-core==2.5.0
 google-cloud-firestore==2.23.0
+google-cloud-storage==2.19.0
 googleapis-common-protos==1.72.0
 grpcio==1.76.0
 grpcio-status==1.76.0

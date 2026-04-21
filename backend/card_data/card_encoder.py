@@ -1,18 +1,25 @@
-"""Encoding utilities for converting `Card` objects into model vectors."""
-
+"""Encodes Card objects into fixed-length numeric feature vectors."""
 from typing import Optional, Tuple
 
 import numpy as np
-from sentence_transformers import SentenceTransformer
 
 from backend.card_data.card import Card
 from backend.card_data.card_fields import CardFields
 
+
 class CardEncoder:
-    """Encode `Card` objects into fixed numeric feature vectors."""
+    """Encodes MTG card metadata and text into flat numpy feature vectors."""
 
     def __init__(self, embed_model_name: Optional[str] ="all-MiniLM-L6-v2"):
-        """Initialize encoder metadata and optional text embedding model."""
+        """Initialize encoder metadata and optionally load a text embedding model.
+
+        Args:
+            embed_model_name: SentenceTransformer model name for text embeddings.
+                Pass None to skip embedding and produce shorter vectors.
+
+        Returns:
+            None
+        """
         self.embed_model_name = embed_model_name
         self.card_types = CardFields.card_types()
         self.card_supertypes = CardFields.card_supertypes()
@@ -20,13 +27,20 @@ class CardEncoder:
         self.color_identities = CardFields.color_identities()
         self.tags = CardFields.card_tags()
         if embed_model_name:
+            from sentence_transformers import SentenceTransformer  # pylint: disable=import-outside-toplevel
             self.embed_model = SentenceTransformer(embed_model_name)
 
     def encode(self, crd: Card) -> Tuple[str, np.ndarray]:
-        """Encode one card into `(card_name, feature_vector)`."""
+        """Encode a card into a (card_name, feature_vector) pair.
+
+        Args:
+            crd: The Card object to encode.
+
+        Returns:
+            A tuple of (card_name, float32 numpy array) representing the card.
+        """
         ret = []
 
-        # Type encodings
         cd = [0] * len(self.card_types)
         for i, card_type in enumerate(self.card_types):
             if card_type in crd.card_types:
@@ -45,10 +59,8 @@ class CardEncoder:
                 cd[i] = 1
         ret += cd
 
-        # Mana cost
         ret += [int(crd.mana_cost)]
 
-        # Color identity
         cd = [0] * len(self.color_identities)
         if not crd.color_identity:
             if crd.mana_cost > 0:
@@ -59,10 +71,8 @@ class CardEncoder:
                     cd[i] = 1
         ret += cd
 
-        # Rarity
         ret += [self.rarity_to_int(crd.rarity)]
 
-        # Text embedding
         if self.embed_model_name:
             embed = self.embed_model.encode(crd.text if crd.text else "", normalize_embeddings=True)
             ret += embed.tolist()
@@ -70,7 +80,17 @@ class CardEncoder:
         return crd.card_name, np.array(ret, dtype=np.float32)
 
     def rarity_to_int(self, rarity: str) -> int:
-        """Map rarity string to encoded integer index."""
+        """Map a rarity string to its encoded integer index.
+
+        Args:
+            rarity: Rarity string (e.g. 'common', 'rare').
+
+        Returns:
+            Integer index corresponding to the rarity.
+
+        Raises:
+            ValueError: If the rarity string is not recognized.
+        """
         try:
             return CardFields.rarity_to_index()[rarity]
         except KeyError as e:
