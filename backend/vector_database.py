@@ -188,8 +188,9 @@ class VectorStore:
         """Find vector by exact/partial id and return `(id, vector)`."""
         if q_id in self.vector_data:
             return self.get_vector_tup(q_id)
+        q_lower = q_id.lower()
         for candidate_id, _ in self.vector_data.items():
-            if q_id in candidate_id:
+            if q_lower in candidate_id.lower():
                 return self.get_vector_tup(candidate_id)
         raise KeyError(f"KeyError: {q_id}")
 

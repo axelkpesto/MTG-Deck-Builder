@@ -26,6 +26,55 @@
     CATEGORY_ORDER.map((name) => [name.toLowerCase(), name]),
   );
 
+  const TAG_DESCRIPTIONS = {
+    Commander:          "Your deck's commander; the face of your strategy",
+    Creature:           "Creature spells without a specific strategy tag",
+    Artifact:           "Artifacts — mana rocks, equipment, and utility permanents",
+    Enchantment:        "Enchantments that modify or lock down the game state",
+    Instant:            "Instant-speed reactive spells",
+    Sorcery:            "Sorcery spells cast on your main phase",
+    Land:               "Mana-producing lands",
+    Planeswalker:       "Planeswalker permanents",
+    Battle:             "Battle permanents",
+    Other:              "Uncategorized or mixed-role cards",
+    Ramp:               "Accelerate mana production to cast spells ahead of curve",
+    "Card Draw":        "Draw cards and refill your hand",
+    Removal:            "Destroy or exile opponent threats",
+    Protection:         "Protect your permanents and players from removal",
+    Tutor:              "Search your library for specific cards",
+    Combo:              "Cards that form an infinite or win-condition combo",
+    Token:              "Create and grow creature tokens",
+    Counters:           "+1/+1 counter synergies and proliferate effects",
+    Reanimation:        "Return cards from the graveyard to the battlefield",
+    Graveyard:          "Graveyard synergies, recursion, and dredge effects",
+    Control:            "Counter spells and lock down opponent actions",
+    Aggro:              "Aggressive creatures and fast damage strategies",
+    Etb:                "Enter-the-battlefield trigger synergies",
+    Extb:               "Exit-the-battlefield trigger synergies",
+    Blink:              "Temporarily exile cards to reuse ETB effects",
+    Aristocrats:        "Sacrifice creatures for value and death triggers",
+    Sacrifice:          "Sacrifice permanents to generate effects",
+    Stax:               "Tax and restrict opponents with lock-down effects",
+    Tribal:             "Creature type synergies and lords",
+    Voltron:            "Equip and buff a single creature to win in combat",
+    Wheel:              "Discard and redraw cards to cycle through the deck",
+    Spellslinger:       "Instant and sorcery synergies; magecraft triggers",
+    Storm:              "Chain spells together to trigger storm copies",
+    Mill:               "Move opponent cards from library to graveyard",
+    Buff:               "Pump spells and permanent stat boosts",
+    Burn:               "Deal damage directly to players or creatures",
+    Combat:             "Combat tricks and attack/block synergies",
+    Discard:            "Force opponents to discard cards from hand",
+    Equipment:          "Equip artifacts onto creatures for bonuses",
+    Landfall:           "Triggers that fire when lands enter the battlefield",
+    "Library Control":  "Scry, topdeck manipulation, and library ordering",
+    "Life Drain":       "Drain opponents' life while gaining your own",
+    "Life Gain":        "Gain life to trigger abilities and stabilize",
+    Outlaw:             "Outlaw tribal synergies (rogues, assassins, pirates, etc.)",
+    Party:              "Party mechanic (cleric, warrior, rogue, wizard)",
+    Theft:              "Steal or copy opponents' permanents and spells",
+  };
+
   const MANA_COLORS = {
     W: { label: "White", bg: "#f4edd0", fg: "#5a4a1a" },
     U: { label: "Blue", bg: "#7ab8d9", fg: "#002b49" },
@@ -188,6 +237,9 @@
   function parseImportLine(line) {
     const trimmed = line.trim();
     if (!trimmed) return null;
+    const prefixX = trimmed.match(/^(\d+)x(.+)$/i);
+    if (prefixX)
+      return { quantity: Number(prefixX[1]), name: prefixX[2].trim() };
     const leadQty = trimmed.match(/^(\d+)\s+(.+)$/);
     if (leadQty)
       return { quantity: Number(leadQty[1]), name: leadQty[2].trim() };
@@ -853,6 +905,7 @@
       const titleDiv = document.createElement("div");
       titleDiv.className = "deck-column-title";
       titleDiv.textContent = group;
+      if (TAG_DESCRIPTIONS[group]) titleDiv.dataset.tooltip = TAG_DESCRIPTIONS[group];
       const qtySpan = document.createElement("span");
       qtySpan.className = "deck-column-qty";
       qtySpan.textContent = `Qty: ${cards.length}`;
