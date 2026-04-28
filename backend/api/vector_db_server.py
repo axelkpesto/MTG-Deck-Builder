@@ -92,11 +92,11 @@ def _load_deckgen() -> None:
         bundle = DeckGenBundle.load(paths=DeckGenPaths(), device=str(device), vector_db=vd)
         _deckgen.bundle = bundle
         _deckgen.state = "ready"
-        logger.info("DeckGenBundle loaded.")
+        logger.info("DeckGenBundle ready.")
         _warmup_node_embeddings(bundle)
-    except (RuntimeError, OSError, ValueError, KeyError, TypeError) as e:
+    except Exception as e:  # pylint: disable=broad-except
         _deckgen.state = "failed"
-        logger.exception("DeckGenBundle failed to load: %s", e)
+        logger.exception("DeckGenBundle failed to load (%s): %s", type(e).__name__, e)
 
 
 threading.Thread(target=_load_deckgen, daemon=True).start()
