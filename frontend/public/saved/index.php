@@ -11,6 +11,7 @@ $user = $_SESSION['user'] ?? null;
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>Saved Decks</title>
+  <link rel="icon" href="/assets/color-wheel.png" type="image/png">
   <link rel="stylesheet" href="/styles.css">
 </head>
 <body data-page="saved">

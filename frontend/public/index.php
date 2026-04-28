@@ -16,6 +16,7 @@ $initialSession = json_encode([
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>MTG Deck Builder</title>
+  <link rel="icon" href="/assets/color-wheel.png" type="image/png">
   <link rel="stylesheet" href="/styles.css">
 </head>
 <body data-page="builder">
@@ -164,7 +165,10 @@ $initialSession = json_encode([
       </div>
       <div class="group">
         <label for="importFile">Upload a text file (.txt)</label>
-        <input id="importFile" class="input" type="file" accept=".txt,.csv">
+        <div class="file-input-wrap">
+          <input id="importFile" class="input" type="file" accept=".txt,.csv">
+          <button id="importFileClear" class="file-clear-btn" type="button" aria-label="Remove file" hidden>×</button>
+        </div>
       </div>
       <div class="group">
         <label for="importCards">Or paste a deck list below</label>

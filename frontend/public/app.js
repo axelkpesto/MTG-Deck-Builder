@@ -111,6 +111,7 @@
     importModal: document.getElementById("importModal"),
     importCards: document.getElementById("importCards"),
     importFile: document.getElementById("importFile"),
+    importFileClear: document.getElementById("importFileClear"),
     importFailed: document.getElementById("importFailed"),
     importBtn: document.getElementById("importBtn"),
     downloadBtn: document.getElementById("downloadBtn"),
@@ -1282,6 +1283,11 @@
     const lines = text.split(/\r?\n/);
     const parsed = lines.map(parseImportLine).filter(Boolean);
     if (parsed.length === 0) {
+      if (els.importFailed) {
+        els.importFailed.hidden = false;
+        els.importFailed.textContent =
+          "No cards found. Use format: '1 Sol Ring' or '4x Lightning Bolt'.";
+      }
       setStatus("No cards to import.", "error");
       return;
     }
@@ -1307,6 +1313,7 @@
         ensureCommanderCardListed();
         if (els.importCards) els.importCards.value = "";
         if (els.importFile) els.importFile.value = "";
+        if (els.importModal) els.importModal.close();
         renderCategoryFilter();
         renderDeck();
         await runAnalysis({ showBusy: false });
@@ -1746,6 +1753,23 @@
     if (els.importModal) {
       els.importModal.addEventListener("click", (e) => {
         if (e.target === els.importModal) els.importModal.close();
+      });
+      els.importModal.addEventListener("close", () => {
+        if (els.importFile) els.importFile.value = "";
+        if (els.importFileClear) els.importFileClear.hidden = true;
+        if (els.importFailed) els.importFailed.hidden = true;
+      });
+    }
+    if (els.importFile) {
+      els.importFile.addEventListener("change", () => {
+        if (els.importFileClear)
+          els.importFileClear.hidden = !els.importFile.files.length;
+      });
+    }
+    if (els.importFileClear) {
+      els.importFileClear.addEventListener("click", () => {
+        if (els.importFile) els.importFile.value = "";
+        els.importFileClear.hidden = true;
       });
     }
 
