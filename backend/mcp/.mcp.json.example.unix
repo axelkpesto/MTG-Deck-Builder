@@ -1,0 +1,13 @@
+{
+  "mcpServers": {
+    "mtg-deck-builder": {
+      "note": "MOVE THIS TO PRODUCT ROOT",
+      "command": "venv/bin/python",
+      "args": ["mcp/mcp_server.py"],
+      "env": {
+        "FLASK_API_PATH": "https://mtg-deck-builder-api-891777334325.us-west1.run.app",
+        "MTG_GLOBAL_API_KEY": "YOUR_API_KEY_HERE"
+      }
+    }
+  }
+}
