@@ -1,0 +1,28 @@
+name: PHP Lint
+
+permissions:
+  contents: read
+
+on:
+  push:
+    paths:
+      - "**/*.php"
+      - ".github/workflows/php-lint.yml"
+  pull_request:
+    paths:
+      - "**/*.php"
+      - ".github/workflows/php-lint.yml"
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up PHP 8.3
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: "8.3"
+
+      - name: Check PHP syntax
+        run: find . -name "*.php" -not -path "./venv/*" | xargs php -l
