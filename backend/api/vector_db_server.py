@@ -899,6 +899,7 @@ def predict_from_vector(vec_np: np.ndarray, threshold: float, top_k: int = 8):
         'scores' (top-k list of dicts), and 'threshold' (float).
     """
     x = torch.from_numpy(vec_np.astype(np.float32)).unsqueeze(0).to(device)
+    assert model is not None, "Tagging model not loaded"
     logits = model(x)
     probs = torch.sigmoid(logits).float().cpu().numpy()[0]
 

@@ -85,7 +85,7 @@ class VectorStore:
         if self.device.type == 'cuda':
             torch.cuda.empty_cache()
 
-    def items(self) -> List[Tuple[str, np.ndarray]]:
+    def items(self) -> List[Tuple[str, torch.Tensor]]:
         """Return all `(id, vector)` items."""
         return list(self.vector_data.items())
 
@@ -93,11 +93,11 @@ class VectorStore:
         """Return all vector ids."""
         return list(self.vector_data.keys())
 
-    def values(self) -> List[np.ndarray]:
+    def values(self) -> List[torch.Tensor]:
         """Return all vectors."""
         return list(self.vector_data.values())
 
-    def setdefault(self, v_id: str, vector: np.ndarray) -> torch.Tensor:
+    def setdefault(self, v_id: str, vector: torch.Tensor) -> torch.Tensor:
         """Set `v_id` to `vector` if absent and return stored value."""
         self._mark_cache(dirty=True)
         return self.vector_data.setdefault(v_id, vector)
