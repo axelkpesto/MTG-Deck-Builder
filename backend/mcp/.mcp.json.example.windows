@@ -1,7 +1,7 @@
 {
   "mcpServers": {
     "mtg-deck-builder": {
-      "note": "MOVE THIS TO PRODUCT ROOT",
+      "note": "MOVE THIS TO PROJECT ROOT",
       "command": "cmd",
       "args": ["/c", "venv\\Scripts\\python.exe", "mcp/mcp_server.py"],
       "env": {
