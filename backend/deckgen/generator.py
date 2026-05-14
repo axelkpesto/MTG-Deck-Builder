@@ -682,7 +682,7 @@ class DeckGenerator:
 
         topv, topi = torch.topk(logits, k=k)
         probs = F.softmax(topv / max(1e-6, float(self.gen.temperature)), dim=0)
-        choice = torch.multinomial(probs, num_samples=1).item()
+        choice = int(torch.multinomial(probs, num_samples=1).item())
         pick_pos = int(topi[choice].item())
         pick_idx = int(cand[pick_pos].item())
         pick_logit = float(topv[choice].item())

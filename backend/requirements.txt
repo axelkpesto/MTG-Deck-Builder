@@ -83,7 +83,7 @@ pylint==4.0.5
 pyparsing==3.3.2
 pytest==9.0.3
 python-dateutil==2.9.0.post0
-python-dotenv==1.2.1
+python-dotenv==1.2.2
 PyYAML==6.0.3
 redis==7.1.0
 regex==2026.1.15
@@ -110,7 +110,7 @@ typer-slim==0.21.1
 typing-inspection==0.4.2
 typing_extensions==4.15.0
 tzdata==2025.3
-urllib3==2.6.3
+urllib3==2.7.0
 Werkzeug==3.1.6
 wrapt==2.0.1
 xxhash==3.6.0
