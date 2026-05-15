@@ -1,3 +1,4 @@
+.mcp.json
 *.pyc
 *.pyo
 *.pyd
@@ -17,3 +18,4 @@ text/
 test.py
 credentials/
 node_features.pt
+.claude/
