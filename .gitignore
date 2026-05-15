@@ -18,3 +18,4 @@ text/
 test.py
 credentials/
 node_features.pt
+.claude/
