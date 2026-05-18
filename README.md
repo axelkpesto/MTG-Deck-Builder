@@ -116,6 +116,78 @@ bundle = DeckGenBundle.load(paths=DeckGenPaths(), device=device, vector_db=vd)
 deck_counts, stats = bundle.generate(commander_name="Atraxa, Praetors' Voice")
 ```
 
+## MCP Server
+
+The MCP server wraps the Flask API as a [Model Context Protocol](https://modelcontextprotocol.io) server, letting AI assistants (Claude Code, Claude Desktop, etc.) call deck-building tools directly.
+
+### Setup
+
+Install the extra dependencies (already in `requirements.txt`):
+```bash
+pip install -r backend/requirements.txt
+```
+
+Set the required env vars (add to `.env` or your shell):
+```bash
+FLASK_API_PATH=https://mtg-deck-builder-api-891777334325.us-west1.run.app   # or http://localhost:8080 for local
+MTG_GLOBAL_API_KEY=your_api_key_here
+```
+
+### Run the server
+
+```bash
+python -m backend.mcp.mcp_server
+```
+
+The server communicates over stdio (FastMCP default), which is what MCP clients expect.
+
+### Connect to Claude Code
+
+Add the server to your Claude Code MCP config (`.claude/settings.json` or user settings):
+```json
+{
+  "mcpServers": {
+    "mtg-deck-builder": {
+      "command": "python",
+      "args": ["-m", "backend.mcp.mcp_server"],
+      "cwd": "/path/to/MTG-Deck-Builder",
+      "env": {
+        "FLASK_API_PATH": "https://mtg-deck-builder-api-891777334325.us-west1.run.app",
+        "MTG_GLOBAL_API_KEY": "your_api_key_here"
+      }
+    }
+  }
+}
+```
+
+### Connect to Claude Desktop
+
+Add the same block under `mcpServers` in `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS) or `%APPDATA%\Claude\claude_desktop_config.json` (Windows), then restart Claude Desktop.
+
+### Available tools
+
+| Tool | Description |
+|---|---|
+| `get_card_description` | Metadata for a single card (mana cost, type, oracle text, colors) |
+| `get_card_descriptions` | Batch metadata for a list of cards |
+| `get_random_card_description` | Metadata for a randomly sampled card |
+| `get_similar_cards` | Cards most similar to a given card by vector similarity |
+| `get_card_tags` | Predicted gameplay role tags for a single card (ramp, draw, removal, etc.) |
+| `get_tags_for_cards` | Batch tag prediction for a list of cards |
+| `generate_deck` | Generate a 100-card Commander deck around a given commander using the GNN model |
+| `analyze_deck` | Analyze a deck — mana curve, color distribution, tag breakdown, and more |
+| `get_vector` | Raw embedding vector for a card |
+| `get_tags_from_vector` | Predict tags directly from a raw embedding vector |
+| `get_random_card` | Name and embedding vector of a randomly sampled card |
+
+### Example usage (via Claude)
+
+Once connected, you can ask Claude things like:
+- *"Generate a Commander deck for Atraxa, Praetors' Voice"*
+- *"What cards are most similar to Sol Ring?"*
+- *"What gameplay tags does Rhystic Study have?"*
+- *"Analyze this deck list: [paste card names]"*
+
 ## API server
 Run locally:
 ```bash
