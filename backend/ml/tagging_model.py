@@ -205,7 +205,8 @@ def _run_train_epoch(model: nn.Module, train_loader: DataLoader, criterion: nn.M
             loss.backward()
             optimizer.step()
         running += loss.item() * xb.size(0)
-    return running / len(train_loader.dataset)
+    assert train_loader.dataset is not None
+    return running / len(train_loader.dataset)  # type: ignore[arg-type]
 
 
 def _run_val_epoch(model: nn.Module, val_loader: DataLoader, criterion: nn.Module, use_cuda_amp: bool) -> float:
@@ -229,7 +230,8 @@ def _run_val_epoch(model: nn.Module, val_loader: DataLoader, criterion: nn.Modul
             logits = model(xb)
             loss = criterion(logits, yb)
             running += loss.item() * xb.size(0)
-    return running / len(val_loader.dataset)
+    assert val_loader.dataset is not None
+    return running / len(val_loader.dataset)  # type: ignore[arg-type]
 
 def train(model: nn.Module, train_loader: DataLoader, val_loader: DataLoader, train_cfg: TrainConfig = TrainConfig()):
     """Train the model for the configured number of epochs, printing loss each epoch.

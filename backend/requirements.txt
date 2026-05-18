@@ -44,6 +44,7 @@ PyJWT==2.10.1
 pyparsing==3.3.2
 python-dateutil==2.9.0.post0
 python-dotenv==1.2.1
+PyYAML==6.0.3
 redis==7.1.0
 requests==2.32.5
 scikit-learn==1.8.0
@@ -59,6 +60,8 @@ torch-geometric==2.7.0
 tqdm==4.67.1
 typing-inspection==0.4.2
 tzdata==2025.3
+urllib3==2.6.3
+Werkzeug==3.1.6
 wrapt==2.0.1
 xxhash==3.6.0
 yarl==1.22.0

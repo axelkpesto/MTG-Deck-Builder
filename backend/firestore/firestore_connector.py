@@ -2,7 +2,7 @@
 
 import os
 from datetime import datetime, timedelta, timezone
-from google.cloud import firestore
+from google.cloud import firestore  # type: ignore[attr-defined]
 from google.cloud.firestore_v1.base_query import FieldFilter
 from dotenv import load_dotenv
 
