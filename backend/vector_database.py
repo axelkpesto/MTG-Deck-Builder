@@ -31,10 +31,19 @@ class VectorStore:
     def __eq__(self, item) -> bool:
         if not isinstance(item, VectorStore):
             return False
-        return self.vector_data.items() == item.vector_data.items()
+        if self.vector_data.keys() != item.vector_data.keys():
+            return False
+        for k, v in self.vector_data.items():
+            value = item.vector_data[k]
+            if isinstance(v, torch.Tensor) and isinstance(value, torch.Tensor):
+                if v.shape != value.shape or not torch.equal(v.cpu(), value.cpu()):
+                    return False
+            elif v != value:
+                return False
+        return True
 
     def __hash__(self) -> int:
-        return hash(frozenset(self.vector_data.items()))
+        return hash(frozenset(self.vector_data.keys()))
 
     def __contains__(self, key) -> bool:
         return key in self.vector_data
