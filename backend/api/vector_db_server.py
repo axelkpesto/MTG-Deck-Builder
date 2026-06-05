@@ -14,12 +14,10 @@ from flask import Flask, request, jsonify, g
 from flask_cors import CORS
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
-from google.api_core.exceptions import GoogleAPICallError, RetryError
-
 from backend.card_data import CardDecoder, SimpleDeck, SimpleDeckAnalyzer
 from backend.config import CONFIG
 from backend.deckgen import DeckGenBundle, DeckGenPaths
-from backend.firestore.firestore_connector import authenticate_api_key, touch_last_used
+from backend.firestore.firestore_connector import authenticate_api_key
 from backend.ml.tagging_model import load_model, predicted_scores_from_probabilities
 from backend.vector_database import VectorDatabase
 
@@ -259,7 +257,7 @@ def set_limit() -> str:
     if hasattr(g, "rate_limit") and g.rate_limit:
         rl = g.rate_limit
         if rl == "unlimited":
-            return DEFAULT_RATE_LIMIT
+            return "1000000 per minute"
         if "/" in rl:
             split = rl.split("/")
             return f"{split[0]} per {split[1]}"
@@ -298,9 +296,6 @@ def _authenticate_api_key():
     if not api_key:
         return error("missing API key", 401)
 
-    if api_key == g.get("last_raw"):
-        return None
-
     info = authenticate_api_key(api_key)
     if not info:
         return error("invalid or expired API key", 403)
@@ -308,12 +303,6 @@ def _authenticate_api_key():
     g.api_key_id = info["api_key_id"]
     g.user_id = info["user_id"]
     g.rate_limit = info["rate_limit"]
-    g.last_raw = api_key
-
-    try:
-        touch_last_used(g.api_key_id)
-    except (GoogleAPICallError, RetryError, ValueError, RuntimeError):
-        pass
     return None
 
 @app.after_request
