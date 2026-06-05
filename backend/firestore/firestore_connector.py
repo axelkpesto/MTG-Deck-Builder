@@ -2,6 +2,7 @@
 
 import os
 from datetime import datetime, timedelta, timezone
+from google.api_core.exceptions import AlreadyExists
 from google.cloud import firestore  # type: ignore[attr-defined]
 from google.cloud.firestore_v1.base_query import FieldFilter
 from dotenv import load_dotenv
@@ -113,22 +114,27 @@ def list_user_decks(owner_id: str, limit: int = 100) -> list[dict]:
     return [normalize_saved_deck_document(doc.id, doc.to_dict() or {}) for doc in query.stream()]
 
 def create_api_key(user_id: str, rate_limit: str = "60/minute", prefix_len: int = 8) -> str:
-    """Create and persist a new API key record; return the raw key."""
-    raw, prefix, key_hash = generate_firebase_api_key(prefix_len)
+    """Create and persist a new API key record; return the raw key.
 
+    Regenerates the key on prefix collision until one lands on an unused doc id.
+    """
     now = datetime.now(timezone.utc)
-    doc = {
-        "user_id": user_id,
-        "key_hash": key_hash,
-        "is_active": True,
-        "created_at": now,
-        "last_used_at": None,
-        "expires_at": now + timedelta(days=365),
-        "rate_limit": rate_limit,
-    }
-
-    db.collection("api_keys").document(prefix).set(doc)
-    return raw
+    while True:
+        raw, prefix, key_hash = generate_firebase_api_key(prefix_len)
+        doc = {
+            "user_id": user_id,
+            "key_hash": key_hash,
+            "is_active": True,
+            "created_at": now,
+            "last_used_at": None,
+            "expires_at": now + timedelta(days=365),
+            "rate_limit": rate_limit,
+        }
+        try:
+            db.collection("api_keys").document(prefix).create(doc)
+            return raw
+        except AlreadyExists:
+            continue
 
 def authenticate_api_key(raw_key: str) -> dict | None:
     """Validate a raw key and return auth metadata when valid."""
@@ -142,6 +148,8 @@ def authenticate_api_key(raw_key: str) -> dict | None:
         return None
 
     data = doc.to_dict()
+    if not data:
+        return None
     if not data.get("is_active", False):
         return None
 
