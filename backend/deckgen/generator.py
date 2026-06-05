@@ -389,7 +389,7 @@ class DeckGenerator:
                     self.node_basic_type_idx[i] = int(idx)
 
         self.tag_map = self.assets.tag_map
-        self.is_ramp_node = self.build_tag_mask(self.gen.ramp_tag)
+        self.is_ramp_node = self.build_tag_mask(self.gen.ramp_tag) & ~self.assets.is_land_node
         self.strategy_tag_nodes: Dict[str, torch.Tensor] = {}
         self.strategy_centroid_cache: Dict[Tuple[str, ...], Optional[torch.Tensor]] = {}
 
@@ -754,7 +754,7 @@ class DeckGenerator:
 
             for t in self.tag_map.get(pick_name, []):
                 state.tag_counts[t] += 1
-            if self.gen.ramp_tag in self.tag_map.get(pick_name, []):
+            if self.gen.ramp_tag in self.tag_map.get(pick_name, []) and not bool(self.assets.is_land_node[pick_idx].item()):
                 state.ramp_count += 1
 
             self.update_strategy_tags(state)
