@@ -138,22 +138,22 @@ class CardFields:
             r'attack each turn',
             r'additional combat phase',
             r'take an extra combat phase',
-            r'deals? \\d+ damage'
+            r'deals? \d+ damage'
         ],
         'combo': [
-            r'cast for \\{0\\}',
+            r'cast for \{0\}',
             r'you win the game',
             r'opponent loses the game',
             r'repeat this process'
         ],
         'control': [
             r'counter target .* spell',
-            r'return target .* to its owner\\x27s hand',
+            r"return target .* to its owner's hand",
             r'exile target .*'
         ],
         'ramp': [
-            r'add \\{[wubrgc]\\}',
-            r'add \\{\\d+\\}',
+            r'add \{[wubrgc]\}',
+            r'add \{\d+\}',
             r'search your library for a(?:n)? (?:basic )?(?:[a-zA-Z]+ )?land',
             r'put (?:it|that card) onto the battlefield(?: tapped)?',
             r'play an additional land'
@@ -163,40 +163,40 @@ class CardFields:
             r'search your library for an? (?:artifact|creature|enchantment|instant|sorcery|land|planeswalker) card'
         ],
         'card_draw': [
-            r'draw (\\d+|[a-zA-Z]+) cards?',
+            r'draw (\d+|[a-zA-Z]+) cards?',
             r'investigate',
-            r'exile the top (\\d+|[a-zA-Z]+) cards? of your library.*you may (?:play|cast)'
+            r'exile the top (\d+|[a-zA-Z]+) cards? of your library.*you may (?:play|cast)'
         ],
         'life_gain': [
-            r'gain \\d+ life',
+            r'gain \d+ life',
             r'gain [a-zA-Z]+ life',
-            r'gains \\d+ life',
+            r'gains \d+ life',
             r'gains [a-zA-Z]+ life'
         ],
         'life_drain': [
-            r'loses \\d+ life',
+            r'loses \d+ life',
             r'loses [a-zA-Z]+ life',
-            r'pays \\d+ life',
+            r'pays \d+ life',
             r'pays [a-zA-Z]+ life'
         ],
         'burn': [
-            r'deals? \\d+ damage',
+            r'deals? \d+ damage',
             r'deals? [a-zA-Z]+ damage'
         ],
         'stax': [
-            r'costs? \\{\\d+\\} more to cast',
-            r'players can\\x27t',
-            r'opponents can\\x27t'
+            r'costs? \{\d+\} more to cast',
+            r"players can't",
+            r"opponents can't"
         ],
         'buff': [
-            r'\\+\\d+/\\+\\d+',
-            r'\\+\\d+/\\-\\d+',
-            r'\\-\\d+/\\+\\d+',
-            r'\\+\\w+/\\+\\w+',
-            r'\\+\\w+/\\-\\w+',
+            r'\+\d+/\+\d+',
+            r'\+\d+/-\d+',
+            r'-\d+/\+\d+',
+            r'\+\w+/\+\w+',
+            r'\+\w+/-\w+',
         ],
         'counters': [
-            r'\\+1/\\+1 counter',
+            r'\+1/\+1 counter',
             r'proliferate',
             r'put a counter on',
             r'remove a counter from'
@@ -239,7 +239,7 @@ class CardFields:
     'Plant', 'Praetor', 'Prism', 'Processor', 'Rabbit', 'Rat', 'Rebel', 'Reflection', 'Rhino', 'Rigger', 'Rogue', 'Sable', 'Salamander', 'Samurai', 'Sand', 'Saproling', 'Satyr', 'Scarecrow', 'Scion', 'Scorpion', 'Scout', 'Serf', 'Serpent', 'Shade', 'Shaman', 'Shapeshifter', 'Sheep', 'Siren', 'Skeleton', 'Slith', 'Sliver', 'Slug', 'Snake', 'Soldier', 'Soltari', 'Spawn', 'Specter', 'Spellshaper', 'Sphinx', 'Spider', 'Spike',\
     'Spirit', 'Splinter', 'Sponge', 'Squid', 'Squirrel', 'Starfish', 'Surrakar', 'Survivor', 'Tetravite', 'Thalakos', 'Thopter', 'Thrull', 'Treefolk', 'Triskelavite', 'Troll', 'Turtle', 'Unicorn', 'Vampire', 'Vedalken', 'Viashino', 'Volver', 'Wall', 'Warrior', 'Weird', 'Werewolf', 'Whale', 'Wizard', 'Wolf', 'Wolverine', 'Wombat', 'Worm', 'Wraith', 'Wurm', 'Yeti', 'Zombie', 'Zubera']]
     __artifact_subtypes = [t.lower() for t in['Blood', 'Clue', 'Food', 'Gold', 'Incubator', 'Junk', 'Map', 'Powerstone', 'Treasure', 'Equipment', 'Fortification', 'Vehicle', 'Attraction', 'Contraption']]
-    __battle_subtypes = [t.lower() for t in['Seige']]
+    __battle_subtypes = [t.lower() for t in['Siege']]
     __enchantment_subtypes = [t.lower() for t in['Aura', 'Background', 'Saga', 'Role', 'Shard', 'Cartouche', 'Case', 'Class', 'Curse', 'Rune', 'Shrine']]
     __land_subtypes = [t.lower() for t in['Plains', 'Forest', 'Mountain', 'Island', 'Swamp', 'Cave', 'Desert', 'Gate', 'Lair', 'Locus', 'Mine', 'Power-Plant', 'Sphere', 'Tower', 'Urza']]
     __spell_subtypes = [t.lower() for t in['Adventure', 'Arcane', 'Chorus', 'Lesson', 'Trap']]
@@ -552,14 +552,14 @@ class CardFields:
             'power': card.get('power', ''),
             'toughness': card.get('toughness', ''),
             'loyalty': card.get('loyalty', ''),
-            'card_id': card.get('identifiers','').get('scryfallId', ''),
+            'card_id': card.get('identifiers', {}).get('scryfallId', ''),
         }
         return Card(**card_kwargs)
 
     @staticmethod
     def parse_moxfieldapi_card(card: dict) -> Card:
         """Parse a Moxfield API card object into a `Card` model."""
-        split = card.get('type_line', 'None').split(' â€” ')
+        split = card.get('type_line', 'None').split(' — ')
         subsplit = [item.lower() for sublist in [s.split(' ') for s in split] for item in sublist]
         card_kwargs = {
             'commander_legal': 'commander' in card['legalities'] and card['legalities']['commander']=="Legal",
