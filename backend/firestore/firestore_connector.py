@@ -2,8 +2,10 @@
 
 import os
 from datetime import datetime, timedelta, timezone
+from typing import cast
 from google.api_core.exceptions import AlreadyExists
 from google.cloud import firestore  # type: ignore[attr-defined]
+from google.cloud.firestore_v1.base_document import DocumentSnapshot
 from google.cloud.firestore_v1.base_query import FieldFilter
 from dotenv import load_dotenv
 
@@ -65,7 +67,7 @@ def save_user_deck(owner_id: str, owner_email: str, title: str, commander: str, 
     saved_cards = normalize_saved_cards(cards)
     now = datetime.now(timezone.utc)
     deck_ref = _saved_decks_collection().document(deck_id) if deck_id else _saved_decks_collection().document()
-    existing = deck_ref.get()
+    existing = cast(DocumentSnapshot, deck_ref.get())
 
     payload = {
         "title": title.strip() or f"{commander.strip()} Deck",
@@ -94,7 +96,7 @@ def save_user_deck(owner_id: str, owner_email: str, title: str, commander: str, 
 
 def get_user_deck(owner_id: str, deck_id: str) -> dict | None:
     """Return a saved deck if it exists and belongs to the requested user."""
-    doc = _saved_decks_collection().document(deck_id).get()
+    doc = cast(DocumentSnapshot, _saved_decks_collection().document(deck_id).get())
     if not doc.exists:
         return None
     payload = doc.to_dict() or {}
@@ -143,7 +145,7 @@ def authenticate_api_key(raw_key: str) -> dict | None:
 
     prefix = raw_key[:8]
     doc_ref = db.collection("api_keys").document(prefix)
-    doc = doc_ref.get()
+    doc = cast(DocumentSnapshot, doc_ref.get())
     if not doc.exists:
         return None
 
