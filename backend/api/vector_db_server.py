@@ -821,6 +821,15 @@ def generate_deck():
     except KeyError:
         return error("id not found", 400)
 
+    card_vec = vd.get(card, None)
+    if card_vec is not None and vd.decoder is not None:
+        card_types = vd.decoder.item_from_vector(card_vec.cpu(), 'types')
+        card_supertypes = vd.decoder.item_from_vector(card_vec.cpu(), 'supertypes')
+        is_legendary = 'legendary' in card_supertypes
+        is_creature = 'creature' in card_types
+        if not is_legendary or not is_creature:
+            return error(f"'{card}' is not a valid commander — must be a legendary creature", 400)
+
     return jsonify(_deckgen.bundle.generate(card))
 
 @app.route('/analyze_deck', methods=['POST'])
