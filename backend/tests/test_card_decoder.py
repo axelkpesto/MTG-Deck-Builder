@@ -1,8 +1,9 @@
 """Tests for `backend.card_data.card_decoder.CardDecoder`.
 
-Covers: `decode`, `decode_to_dict`, `_title_case`, `int_to_rarity`, `slice`,
-`item_from_vector`, `constrain_logits`, `land_mask_from_vectors`,
-`color_identity_mask_from_vectors`, and `mana_value_from_vectors`.
+Covers: `decode`, `decode_to_dict`, title casing (via the public Name output),
+`int_to_rarity`, `slice`, `item_from_vector`, `constrain_logits`,
+`land_mask_from_vectors`, `color_identity_mask_from_vectors`, and
+`mana_value_from_vectors`.
 """
 import numpy as np
 import pytest
@@ -14,34 +15,43 @@ from .conftest import make_encoded_vector
 
 
 # ---------------------------------------------------------------------------
-# _title_case
+# Title casing (exercised through the public decode_to_dict Name field)
 # ---------------------------------------------------------------------------
 
 
 class TestTitleCase:
     """Card-name title casing keeps transition words lowercase except at start."""
 
+    decoder: CardDecoder
+
+    def setup_method(self):
+        """Construct a decoder for each test."""
+        self.decoder = CardDecoder()
+
+    def _name(self, raw: str) -> str:
+        """Return the title-cased Name produced by decoding `raw`."""
+        return self.decoder.decode_to_dict(raw, make_encoded_vector())["Name"]
+
     def test_simple_title_case(self):
-        assert CardDecoder._title_case("sol ring") == "Sol Ring"
+        """Each word of a plain name is capitalized."""
+        assert self._name("sol ring") == "Sol Ring"
 
     def test_transitions_lowercased_mid_string(self):
-        # The decoder's transition set is {of, the, in, on, at, to, for, and, but, or, nor, a, an}.
-        assert CardDecoder._title_case("city of brass") == "City of Brass"
-        assert CardDecoder._title_case("seat of the synod") == "Seat of the Synod"
+        """Transition words stay lowercase when not at the start."""
+        assert self._name("city of brass") == "City of Brass"
+        assert self._name("seat of the synod") == "Seat of the Synod"
 
     def test_leading_transition_word_capitalized(self):
-        # First word always capitalized even if it's a transition word.
-        out = CardDecoder._title_case("of one mind")
-        assert out.split(" ")[0] == "Of"
+        """A leading transition word is still capitalized."""
+        assert self._name("of one mind") == "Of One Mind"
 
     def test_single_word(self):
-        assert CardDecoder._title_case("forest") == "Forest"
+        """A single-word name is capitalized."""
+        assert self._name("forest") == "Forest"
 
     def test_apostrophes_and_punctuation_preserved(self):
-        # `.capitalize()` lowercases everything after the first letter, which is
-        # the behavior we expect from this helper. Just sanity-check no crash.
-        out = CardDecoder._title_case("atraxa, praetors' voice")
-        assert "Atraxa" in out
+        """Names with punctuation title-case without error."""
+        assert "Atraxa" in self._name("atraxa, praetors' voice")
 
 
 # ---------------------------------------------------------------------------
@@ -52,18 +62,23 @@ class TestTitleCase:
 class TestIntToRarity:
     """`int_to_rarity` mirrors `CardFields.rarity_map`."""
 
+    decoder: CardDecoder
+
     def setup_method(self):
+        """Construct a decoder for each test."""
         self.decoder = CardDecoder()
 
     @pytest.mark.parametrize("idx,name", list(CardFields.rarity_map().items()))
     def test_known_indices(self, idx, name):
+        """Each known rarity index maps to its name."""
         assert self.decoder.int_to_rarity(idx) == name
 
     def test_unknown_returns_unknown(self):
+        """An out-of-range index returns 'Unknown'."""
         assert self.decoder.int_to_rarity(99999) == "Unknown"
 
     def test_zero_returns_unknown(self):
-        # rarity_map is 1-indexed
+        """Index 0 is unknown because the rarity map is 1-indexed."""
         assert self.decoder.int_to_rarity(0) == "Unknown"
 
 
@@ -75,10 +90,14 @@ class TestIntToRarity:
 class TestDecodeToDict:
     """Round-trip decoding the structured prefix of an encoded card vector."""
 
+    decoder: CardDecoder
+
     def setup_method(self):
+        """Construct a decoder for each test."""
         self.decoder = CardDecoder()
 
     def test_basic_creature_decode(self):
+        """A creature vector decodes into the expected structured fields."""
         vec = make_encoded_vector(
             card_types=["creature"],
             supertypes=["legendary"],
@@ -98,6 +117,7 @@ class TestDecodeToDict:
         assert out["Rarity"] == "Rare"
 
     def test_basic_land_decode(self):
+        """A basic-land vector decodes with zero mana and empty color identity."""
         vec = make_encoded_vector(
             card_types=["land"],
             supertypes=["basic"],
@@ -116,6 +136,7 @@ class TestDecodeString:
     """`decode` formats the dict as newline-delimited 'k: v' lines."""
 
     def test_decode_returns_string_with_all_keys(self):
+        """The decoded string contains every field label."""
         decoder = CardDecoder()
         vec = make_encoded_vector(
             card_types=["creature"], mana=2,
@@ -127,12 +148,13 @@ class TestDecodeString:
             assert k in text
 
     def test_one_line_per_field(self):
+        """The decoded string has one line per field (seven total)."""
         decoder = CardDecoder()
         vec = make_encoded_vector(
             rarity_index=CardFields.rarity_to_index()["common"],
         )
         lines = decoder.decode("x", vec).splitlines()
-        assert len(lines) == 7  # seven fields
+        assert len(lines) == 7
 
 
 # ---------------------------------------------------------------------------
@@ -143,22 +165,28 @@ class TestDecodeString:
 class TestSlice:
     """`slice()` returns valid python slices for each feature group."""
 
+    decoder: CardDecoder
+
     def setup_method(self):
+        """Construct a decoder for each test."""
         self.decoder = CardDecoder()
 
     def test_slice_for_types(self):
+        """The 'types' slice spans the start of the type vocabulary."""
         s = self.decoder.slice("types", 1000)
         assert isinstance(s, slice)
         assert s.start == 0
         assert s.stop == len(CardFields.card_types())
 
     def test_slice_for_embed_uses_tail_of_vector(self):
+        """The 'embed' slice is the embedding-sized tail of the vector."""
         dim = 1000
         s = self.decoder.slice("embed", dim)
         assert s.stop == dim
         assert s.start == dim - self.decoder.embed_dim
 
     def test_slice_invalid_key_raises(self):
+        """An unknown slice key raises `KeyError`."""
         with pytest.raises(KeyError):
             self.decoder.slice("nonexistent_field", 1000)
 
@@ -171,21 +199,26 @@ class TestSlice:
 class TestItemFromVector:
     """Categorical decoding from a slice of a vector."""
 
+    decoder: CardDecoder
+
     def setup_method(self):
+        """Construct a decoder for each test."""
         self.decoder = CardDecoder()
 
     def test_creature_type_extracted(self):
+        """An active 'creature' bit is decoded back to the type."""
         vec = make_encoded_vector(card_types=["creature"])
         types = self.decoder.item_from_vector(vec, "types")
         assert "creature" in types
 
     def test_no_active_returns_empty(self):
-        vec = make_encoded_vector()  # all zeros except mana/rarity scalars
+        """A vector with no active bits decodes to an empty list."""
+        vec = make_encoded_vector()
         types = self.decoder.item_from_vector(vec, "types")
         assert types == []
 
     def test_threshold_respected(self):
-        # All bits set to 0.4 — below default 0.5 threshold ⇒ none active
+        """Bits below the threshold are excluded; lowering it includes them."""
         layout_len = (
             len(CardFields.card_types())
             + len(CardFields.card_supertypes())
@@ -210,10 +243,14 @@ class TestItemFromVector:
 class TestLandMaskFromVectors:
     """Boolean mask over rows encoded as lands."""
 
+    decoder: CardDecoder
+
     def setup_method(self):
+        """Construct a decoder for each test."""
         self.decoder = CardDecoder()
 
     def test_mask_picks_out_land_rows(self):
+        """The mask is True for land rows and False otherwise."""
         land_vec = make_encoded_vector(card_types=["land"])
         creature_vec = make_encoded_vector(card_types=["creature"])
         mat = torch.from_numpy(np.stack([land_vec, creature_vec]))
@@ -221,6 +258,7 @@ class TestLandMaskFromVectors:
         assert mask.tolist() == [True, False]
 
     def test_empty_input(self):
+        """An empty matrix yields an empty mask."""
         empty = torch.zeros((0, 1000))
         mask = self.decoder.land_mask_from_vectors(empty)
         assert mask.shape == (0,)
@@ -234,10 +272,14 @@ class TestLandMaskFromVectors:
 class TestColorIdentityMaskFromVectors:
     """Per-color identity mask matrix."""
 
+    decoder: CardDecoder
+
     def setup_method(self):
+        """Construct a decoder for each test."""
         self.decoder = CardDecoder()
 
     def test_color_mask_shape_and_contents(self):
+        """The mask has the right shape and flags the present colors."""
         a = make_encoded_vector(color_identity=["U"])
         b = make_encoded_vector(color_identity=["W", "G"])
         mat = torch.from_numpy(np.stack([a, b]))
@@ -259,10 +301,14 @@ class TestColorIdentityMaskFromVectors:
 class TestManaValueFromVectors:
     """Extract and clamp mana values from a stack of encoded vectors."""
 
+    decoder: CardDecoder
+
     def setup_method(self):
+        """Construct a decoder for each test."""
         self.decoder = CardDecoder()
 
     def test_typical_mana_values_returned(self):
+        """Typical mana values are returned unchanged."""
         a = make_encoded_vector(mana=2)
         b = make_encoded_vector(mana=5)
         mat = torch.from_numpy(np.stack([a, b]))
@@ -270,12 +316,14 @@ class TestManaValueFromVectors:
         assert mv.tolist() == [2.0, 5.0]
 
     def test_mana_values_clamped_to_zero_minimum(self):
+        """Negative mana values clamp to zero."""
         a = make_encoded_vector(mana=-3)
         mat = torch.from_numpy(np.stack([a]))
         mv = self.decoder.mana_value_from_vectors(mat)
         assert mv.tolist() == [0.0]
 
     def test_mana_values_clamped_to_30_maximum(self):
+        """Very large mana values clamp to the maximum of 30."""
         a = make_encoded_vector(mana=999)
         mat = torch.from_numpy(np.stack([a]))
         mv = self.decoder.mana_value_from_vectors(mat)
@@ -290,10 +338,14 @@ class TestManaValueFromVectors:
 class TestConstrainLogits:
     """`constrain_logits` projects raw logits into valid encoded card vectors."""
 
+    decoder: CardDecoder
+
     def setup_method(self):
+        """Construct a decoder for each test."""
         self.decoder = CardDecoder()
 
     def _logit_dim(self):
+        """Return the full logit vector length (structural fields + embedding)."""
         return (
             len(CardFields.card_types())
             + len(CardFields.card_supertypes())
@@ -305,12 +357,14 @@ class TestConstrainLogits:
         )
 
     def test_output_shape_matches_input(self):
+        """The constrained output keeps the input shape."""
         dim = self._logit_dim()
         x = torch.zeros((2, dim))
         out = self.decoder.constrain_logits(x)
         assert out.shape == x.shape
 
     def test_categorical_bits_binary(self):
+        """Categorical (type) bits are projected to 0.0 or 1.0."""
         dim = self._logit_dim()
         x = torch.zeros((1, dim))
         out = self.decoder.constrain_logits(x)
@@ -320,6 +374,7 @@ class TestConstrainLogits:
             assert b in (0.0, 1.0)
 
     def test_mana_clamped_to_range(self):
+        """The mana slot is clamped into [0, 16]."""
         dim = self._logit_dim()
         x = torch.full((1, dim), -50.0)
         out = self.decoder.constrain_logits(x)
@@ -328,4 +383,4 @@ class TestConstrainLogits:
 
         x_hi = torch.full((1, dim), 999.0)
         out_hi = self.decoder.constrain_logits(x_hi)
-        assert out_hi[0, mana_slice].item() == 16.0  # encoder caps mana at 16
+        assert out_hi[0, mana_slice].item() == 16.0

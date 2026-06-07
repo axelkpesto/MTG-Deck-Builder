@@ -7,15 +7,13 @@ themselves are exercised in `test_vector_db_server_routes.py`.
 """
 import importlib
 import sys
-import types
 from unittest.mock import MagicMock, patch
 
-import numpy as np
 import pytest
 
 
-@pytest.fixture(scope="module")
-def server_module():
+@pytest.fixture(scope="module", name="server_module")
+def _server_module():
     """Import `backend.api.vector_db_server` with all heavy module-level loads patched."""
 
     # Make sure the module re-imports under patches.
@@ -33,10 +31,7 @@ def server_module():
          patch("backend.api.vector_db_server.open", create=True), \
          patch("backend.api.vector_db_server.json.load", return_value={}):
         mock_vd_cls.return_value = fake_vd
-        try:
-            import backend.api.vector_db_server as mod  # noqa: WPS433
-        except Exception as exc:  # pragma: no cover - depends on env
-            pytest.skip(f"Could not import vector_db_server even with mocks: {exc}")
+        mod = importlib.import_module("backend.api.vector_db_server")
         yield mod
 
     sys.modules.pop("backend.api.vector_db_server", None)
@@ -57,6 +52,7 @@ class TestClampHelpers:
         (5, 5, 5, 5),
     ])
     def test_clamp_int(self, server_module, x, lo, hi, expected):
+        """Integers clamp into the inclusive [lo, hi] range."""
         assert server_module.clamp_int(x, lo, hi) == expected
 
     @pytest.mark.parametrize("x,lo,hi,expected", [
@@ -66,6 +62,7 @@ class TestClampHelpers:
         (0.0, 0.0, 1.0, 0.0),
     ])
     def test_clamp_float(self, server_module, x, lo, hi, expected):
+        """Floats clamp into the inclusive [lo, hi] range."""
         assert server_module.clamp_float(x, lo, hi) == expected
 
 
@@ -78,24 +75,26 @@ class TestFormatId:
     """`format_id` mirrors `CardDecoder._title_case` for API-side id normalization."""
 
     def test_simple_title_case(self, server_module):
+        """A plain name is title-cased."""
         assert server_module.format_id("sol ring") == "Sol Ring"
 
     def test_transition_words_lowercased(self, server_module):
-        # The server's transition set is {of, the, in, on, at, to, for, and, but, or, nor}.
+        """Transition words stay lowercase mid-string."""
         assert server_module.format_id("city of brass") == "City of Brass"
         assert server_module.format_id("seat of the synod") == "Seat of the Synod"
 
     def test_leading_transition_word_capitalized(self, server_module):
-        # First word always capitalized, even transition words.
-        assert server_module.format_id("of one mind").split(" ")[0] == "Of"
+        """A leading transition word is capitalized."""
+        assert server_module.format_id("of one mind") == "Of One Mind"
 
     def test_already_titled_string_remains_titled(self, server_module):
-        # Idempotency: applying twice should give the same result
+        """`format_id` is idempotent on already-titled input."""
         once = server_module.format_id("magnus the red")
         twice = server_module.format_id(once)
         assert once == twice
 
     def test_single_word(self, server_module):
+        """A single word is capitalized."""
         assert server_module.format_id("forest") == "Forest"
 
 
@@ -108,28 +107,34 @@ class TestParseCardListPayload:
     """Validate request payload for batch-cards endpoints."""
 
     def test_returns_stripped_non_empty_strings(self, server_module):
+        """Entries are stripped and blanks removed."""
         out = server_module.parse_card_list_payload(
             {"cards": ["  A  ", "B", "  ", "C"]}
         )
         assert out == ["A", "B", "C"]
 
     def test_missing_cards_key_raises(self, server_module):
+        """A missing 'cards' key raises `ValueError`."""
         with pytest.raises(ValueError):
             server_module.parse_card_list_payload({})
 
     def test_not_a_list_raises(self, server_module):
+        """A non-list 'cards' value raises `ValueError`."""
         with pytest.raises(ValueError):
             server_module.parse_card_list_payload({"cards": "Atraxa"})
 
     def test_non_string_entry_raises(self, server_module):
+        """A non-string entry raises `ValueError`."""
         with pytest.raises(ValueError):
             server_module.parse_card_list_payload({"cards": ["A", 42]})
 
     def test_all_whitespace_entries_raises(self, server_module):
+        """An all-whitespace list raises `ValueError`."""
         with pytest.raises(ValueError):
             server_module.parse_card_list_payload({"cards": ["   ", "\t"]})
 
     def test_empty_list_raises(self, server_module):
+        """An empty list raises `ValueError`."""
         with pytest.raises(ValueError):
             server_module.parse_card_list_payload({"cards": []})
 
@@ -143,21 +148,26 @@ class TestParseRequiredCardId:
     """Validate request payload for single-card endpoints."""
 
     def test_returns_stripped_value(self, server_module):
+        """A present id is returned stripped."""
         assert server_module.parse_required_card_id({"id": "  Atraxa  "}) == "Atraxa"
 
     def test_missing_raises(self, server_module):
+        """A missing id raises `ValueError`."""
         with pytest.raises(ValueError):
             server_module.parse_required_card_id({})
 
     def test_blank_string_raises(self, server_module):
+        """A blank id raises `ValueError`."""
         with pytest.raises(ValueError):
             server_module.parse_required_card_id({"id": "   "})
 
     def test_non_string_raises(self, server_module):
+        """A non-string id raises `ValueError`."""
         with pytest.raises(ValueError):
             server_module.parse_required_card_id({"id": 123})
 
     def test_custom_field_name(self, server_module):
+        """A custom field name is honored."""
         assert server_module.parse_required_card_id(
             {"commander": "Atraxa"}, field_name="commander"
         ) == "Atraxa"
@@ -172,6 +182,7 @@ class TestErrorHelper:
     """`error` returns a Flask-style JSON tuple."""
 
     def test_returns_tuple(self, server_module):
+        """`error` returns a (response, status) pair with the message."""
         with server_module.app.app_context():
             response, status = server_module.error("bad input", 400)
             assert status == 400
@@ -179,6 +190,7 @@ class TestErrorHelper:
             assert data == {"error": "bad input"}
 
     def test_default_status_is_400(self, server_module):
+        """`error` defaults to HTTP 400."""
         with server_module.app.app_context():
             _, status = server_module.error("oh no")
             assert status == 400
@@ -202,20 +214,23 @@ class TestResolveCardId:
         server_module.vd = original
 
     def test_exact_match_in_vd(self, server_module, _mock_vd):
+        """An exact name present in the vd resolves to itself."""
         _mock_vd.__contains__.side_effect = lambda k: k == "Atraxa"
         assert server_module.resolve_card_id("Atraxa") == "Atraxa"
 
     def test_formatted_match(self, server_module, _mock_vd):
-        # Raw "atraxa" not in vd; "Atraxa" (format_id output) is.
+        """A raw name resolves via its formatted (title-cased) form."""
         _mock_vd.__contains__.side_effect = lambda k: k == "Atraxa"
         assert server_module.resolve_card_id("atraxa") == "Atraxa"
 
     def test_fallback_to_find_id(self, server_module, _mock_vd):
+        """When not present, resolution falls back to `find_id`."""
         _mock_vd.__contains__.return_value = False
         _mock_vd.find_id.return_value = "Sol Ring"
         assert server_module.resolve_card_id("sol") == "Sol Ring"
 
     def test_blank_raises(self, server_module, _mock_vd):
+        """A blank id raises `KeyError`."""
         with pytest.raises(KeyError):
             server_module.resolve_card_id("   ")
 
@@ -229,7 +244,7 @@ class TestGetApiKeyFromRequest:
     """Auth header extraction handles bearer and X-API-KEY forms."""
 
     def _fake_request(self, headers):
-        # Mirror Flask's `request.headers.get(key)` -> None for missing keys.
+        """Build a fake request whose `headers.get` mirrors Flask's behavior."""
         req = MagicMock()
         sentinel = object()
 
@@ -243,17 +258,21 @@ class TestGetApiKeyFromRequest:
         return req
 
     def test_authorization_bearer(self, server_module):
+        """A Bearer Authorization header yields the token."""
         req = self._fake_request({"Authorization": "Bearer secret-key"})
         assert server_module.get_api_key_from_request(req) == "secret-key"
 
     def test_authorization_bearer_lowercase(self, server_module):
+        """A lowercase 'bearer' scheme is accepted."""
         req = self._fake_request({"Authorization": "bearer secret-key"})
         assert server_module.get_api_key_from_request(req) == "secret-key"
 
     def test_x_api_key_header(self, server_module):
+        """An X-API-KEY header yields the key."""
         req = self._fake_request({"X-API-KEY": "abc"})
         assert server_module.get_api_key_from_request(req) == "abc"
 
     def test_none_when_missing(self, server_module):
+        """No auth headers yields None."""
         req = self._fake_request({})
         assert server_module.get_api_key_from_request(req) is None

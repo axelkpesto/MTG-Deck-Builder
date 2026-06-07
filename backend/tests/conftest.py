@@ -1,26 +1,21 @@
 """Shared pytest fixtures and helpers for backend tests."""
 import os
-import sys
-from pathlib import Path
 from typing import List
 
 import numpy as np
 import pytest
 import torch
 
-# Ensure the project root is on sys.path so `import backend.*` works when running pytest
-# from anywhere within the repo.
-ROOT = Path(__file__).resolve().parents[2]
-if str(ROOT) not in sys.path:
-    sys.path.insert(0, str(ROOT))
+from backend.card_data import Card, CardDecoder, CardFields
+from backend.vector_database import VectorDatabase, VectorStore
 
-# Set required env vars for modules that read them at import time, before they get imported.
+# Set required env vars for modules that read them at import time. conftest is
+# imported before any test module, so backend.api / backend.firestore see these
+# by the time they are imported. (card_data / vector_database do not read them.)
 os.environ.setdefault("API_KEY_PEPPER", "test-pepper-value")
 os.environ.setdefault("REDIS_URL", "memory://")
 os.environ.setdefault("AUTHENTICATE", "0")
 os.environ.setdefault("FLASK_DEBUG", "0")
-
-from backend.card_data import Card, CardFields
 
 
 # ----------------------------- helpers ----------------------------------------
@@ -31,7 +26,7 @@ def make_card(
     card_name: str = "Test Card",
     commander_legal: bool = True,
     card_types: List[str] | None = None,
-    card_supertypes: List[str] | str = "",
+    card_supertypes: str = "",
     card_subtypes: List[str] | None = None,
     mana_cost: int = 3,
     mana_cost_exp: str = "{2}{U}",
@@ -165,8 +160,8 @@ def encoded_vector_factory():
     return make_encoded_vector
 
 
-@pytest.fixture
-def fake_encoder():
+@pytest.fixture(name="fake_encoder")
+def _fake_encoder():
     """Lightweight stand-in for `CardEncoder` to skip SentenceTransformer downloads."""
 
     class _FakeEncoder:
@@ -174,23 +169,22 @@ def fake_encoder():
             self.dim = dim
 
         def encode(self, card: Card):
+            """Return a deterministic (name, vector) pair seeded by the card name."""
             rng = np.random.default_rng(abs(hash(card.card_name)) % (2**32))
             return card.card_name, rng.standard_normal(self.dim).astype(np.float32)
 
     return _FakeEncoder()
 
 
-@pytest.fixture
-def fake_decoder():
+@pytest.fixture(name="fake_decoder")
+def _fake_decoder():
     """Decoder fixture: a real CardDecoder is fine since it has no heavy deps."""
-    from backend.card_data import CardDecoder
     return CardDecoder()
 
 
 @pytest.fixture
 def empty_vector_store(fake_encoder, fake_decoder):
     """A fresh, empty `VectorStore`."""
-    from backend.vector_database import VectorStore
     return VectorStore(fake_encoder, fake_decoder)
 
 
@@ -201,15 +195,14 @@ def populated_vector_store(fake_encoder, fake_decoder):
     Uses the real encoder layout (types|supertypes|subtypes|mana|colors|rarity)
     so the decoder can describe these vectors without IndexError.
     """
-    from backend.vector_database import VectorStore
     store = VectorStore(fake_encoder, fake_decoder)
     rng = np.random.default_rng(0)
     specs = {
-        "Atraxa": dict(card_types=["creature"], color_identity=["W", "U", "B", "G"], mana=4, rarity_index=4),
-        "Sol Ring": dict(card_types=["artifact"], mana=1, rarity_index=2),
-        "Lightning Bolt": dict(card_types=["instant"], color_identity=["R"], mana=1, rarity_index=1),
-        "Forest": dict(card_types=["land"], subtypes=["forest"], mana=0, rarity_index=1),
-        "Counterspell": dict(card_types=["instant"], color_identity=["U"], mana=2, rarity_index=1),
+        "Atraxa": {"card_types": ["creature"], "color_identity": ["W", "U", "B", "G"], "mana": 4, "rarity_index": 4},
+        "Sol Ring": {"card_types": ["artifact"], "mana": 1, "rarity_index": 2},
+        "Lightning Bolt": {"card_types": ["instant"], "color_identity": ["R"], "mana": 1, "rarity_index": 1},
+        "Forest": {"card_types": ["land"], "subtypes": ["forest"], "mana": 0, "rarity_index": 1},
+        "Counterspell": {"card_types": ["instant"], "color_identity": ["U"], "mana": 2, "rarity_index": 1},
     }
     for name, kw in specs.items():
         v = make_encoded_vector(**kw)
@@ -222,28 +215,26 @@ def populated_vector_store(fake_encoder, fake_decoder):
 @pytest.fixture
 def empty_vector_database(fake_encoder, fake_decoder):
     """An empty `VectorDatabase`."""
-    from backend.vector_database import VectorDatabase
     return VectorDatabase(fake_encoder, fake_decoder)
 
 
 @pytest.fixture
 def populated_vector_database(fake_encoder, fake_decoder):
     """A `VectorDatabase` populated with deterministic encoded vectors."""
-    from backend.vector_database import VectorDatabase
-    db = VectorDatabase(fake_encoder, fake_decoder)
+    database = VectorDatabase(fake_encoder, fake_decoder)
     rng = np.random.default_rng(1)
     specs = {
-        "Atraxa": dict(card_types=["creature"], color_identity=["W", "U", "B", "G"], mana=4, rarity_index=4),
-        "Sol Ring": dict(card_types=["artifact"], mana=1, rarity_index=2),
-        "Lightning Bolt": dict(card_types=["instant"], color_identity=["R"], mana=1, rarity_index=1),
-        "Forest": dict(card_types=["land"], subtypes=["forest"], mana=0, rarity_index=1),
-        "Counterspell": dict(card_types=["instant"], color_identity=["U"], mana=2, rarity_index=1),
+        "Atraxa": {"card_types": ["creature"], "color_identity": ["W", "U", "B", "G"], "mana": 4, "rarity_index": 4},
+        "Sol Ring": {"card_types": ["artifact"], "mana": 1, "rarity_index": 2},
+        "Lightning Bolt": {"card_types": ["instant"], "color_identity": ["R"], "mana": 1, "rarity_index": 1},
+        "Forest": {"card_types": ["land"], "subtypes": ["forest"], "mana": 0, "rarity_index": 1},
+        "Counterspell": {"card_types": ["instant"], "color_identity": ["U"], "mana": 2, "rarity_index": 1},
     }
     for name, kw in specs.items():
         v = make_encoded_vector(**kw)
         v = v + rng.normal(0.0, 0.001, size=v.shape).astype(np.float32)
-        db.add_vector(name, v)
-    return db
+        database.add_vector(name, v)
+    return database
 
 
 @pytest.fixture

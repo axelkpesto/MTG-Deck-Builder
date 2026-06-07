@@ -21,9 +21,7 @@ jobs:
         python-version: ["3.12"]
 
     env:
-      # Dummy test values, NOT secrets. Safe to commit because they're only
-      # used during pytest and have no production meaning.
-      API_KEY_PEPPER: ci-test-pepper-value-not-secret
+      API_KEY_PEPPER: ci-test-pepper
       REDIS_URL: memory://
       AUTHENTICATE: "0"
       FLASK_DEBUG: "0"

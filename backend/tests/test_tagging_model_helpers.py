@@ -10,9 +10,7 @@ that the API uses at runtime:
 - `save_model` / `load_model` round-trip
 """
 import numpy as np
-import pytest
 import torch
-from torch import nn
 
 from backend.ml.tagging_model import (
     MLP,
@@ -32,22 +30,26 @@ class TestMLP:
     """`MLP.forward` produces correctly shaped logits."""
 
     def test_output_shape_matches_args(self):
+        """Forward output shape is (batch, output_dim)."""
         m = MLP(input_dim=16, output_dim=4, hidden=32)
         x = torch.zeros(7, 16)
         out = m(x)
         assert out.shape == (7, 4)
 
     def test_returns_tensor(self):
+        """Forward returns a `torch.Tensor`."""
         m = MLP(input_dim=8, output_dim=2)
         out = m(torch.zeros(1, 8))
         assert isinstance(out, torch.Tensor)
 
     def test_default_hidden_dim(self):
+        """The default hidden dimension still produces correctly shaped output."""
         m = MLP(input_dim=5, output_dim=2)
         out = m(torch.zeros(3, 5))
         assert out.shape == (3, 2)
 
     def test_forward_grad_disabled_under_no_grad(self):
+        """Output under `torch.no_grad()` does not require gradients."""
         m = MLP(input_dim=4, output_dim=2)
         x = torch.zeros(1, 4)
         with torch.no_grad():
@@ -64,12 +66,14 @@ class TestVectorsDataset:
     """Dataset wraps numpy arrays as tensors and supports indexing."""
 
     def test_len_matches_input(self):
+        """Dataset length equals the number of input rows."""
         features = np.zeros((5, 4), dtype=np.float32)
         labels = np.zeros((5, 2), dtype=np.float32)
         ds = VectorsDataset(features, labels)
         assert len(ds) == 5
 
     def test_indexing_returns_pair(self):
+        """Indexing returns the (features, labels) tensor pair for that row."""
         features = np.arange(12, dtype=np.float32).reshape(3, 4)
         labels = np.eye(3, dtype=np.float32)
         ds = VectorsDataset(features, labels)
@@ -80,6 +84,7 @@ class TestVectorsDataset:
         assert torch.equal(x, torch.tensor([4.0, 5.0, 6.0, 7.0]))
 
     def test_returns_tensor_types(self):
+        """Indexed features and labels are both tensors."""
         features = np.zeros((1, 2), dtype=np.float32)
         labels = np.zeros((1, 2), dtype=np.float32)
         ds = VectorsDataset(features, labels)
@@ -97,6 +102,7 @@ class TestPredictedScoresFromProbabilities:
     """Threshold-filter probs and return sorted (tag,score) pairs + flat list."""
 
     def test_filters_below_threshold(self):
+        """Tags with probability below the threshold are dropped."""
         probs = np.array([0.9, 0.4, 0.6])
         names = ["a", "b", "c"]
         scores, predicted = predicted_scores_from_probabilities(
@@ -106,6 +112,7 @@ class TestPredictedScoresFromProbabilities:
         assert set(predicted) == {"a", "c"}
 
     def test_results_sorted_descending(self):
+        """Scores are sorted descending and `predicted` matches that order."""
         probs = np.array([0.5, 0.9, 0.7])
         names = ["a", "b", "c"]
         scores, predicted = predicted_scores_from_probabilities(
@@ -117,6 +124,7 @@ class TestPredictedScoresFromProbabilities:
         assert predicted == [scores[0]["tag"], scores[1]["tag"], scores[2]["tag"]]
 
     def test_empty_when_all_below_threshold(self):
+        """When every probability is below the threshold, results are empty."""
         probs = np.array([0.1, 0.2])
         scores, predicted = predicted_scores_from_probabilities(
             probs, ["a", "b"], threshold=0.9
@@ -125,13 +133,15 @@ class TestPredictedScoresFromProbabilities:
         assert predicted == []
 
     def test_inclusive_threshold(self):
+        """A probability exactly at the threshold is included."""
         probs = np.array([0.5])
-        scores, predicted = predicted_scores_from_probabilities(
+        _, predicted = predicted_scores_from_probabilities(
             probs, ["x"], threshold=0.5
         )
         assert predicted == ["x"]
 
     def test_score_field_is_python_float(self):
+        """Each score field is a native Python float (not numpy)."""
         probs = np.array([0.8, 0.7], dtype=np.float32)
         scores, _ = predicted_scores_from_probabilities(probs, ["a", "b"], 0.0)
         for s in scores:
@@ -147,6 +157,7 @@ class TestSaveLoadModel:
     """`save_model` writes a checkpoint that `load_model` can reload."""
 
     def test_round_trip(self, tmp_path):
+        """A saved model reloads with identical class names and outputs."""
         model = MLP(input_dim=4, output_dim=3, hidden=8)
         # Set known weights
         with torch.no_grad():
@@ -170,6 +181,7 @@ class TestSaveLoadModel:
         assert torch.allclose(original_out, loaded_out)
 
     def test_load_returns_eval_mode(self, tmp_path):
+        """A reloaded model is returned in eval mode."""
         model = MLP(input_dim=2, output_dim=2)
 
         class _Mlb:
