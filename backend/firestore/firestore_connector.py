@@ -2,6 +2,7 @@
 
 import os
 from datetime import datetime, timedelta, timezone
+from functools import lru_cache
 from typing import cast
 from google.api_core.exceptions import AlreadyExists
 from google.cloud import firestore  # type: ignore[attr-defined]
@@ -18,12 +19,21 @@ def get_firestore_client(project_id: str | None = None) -> firestore.Client:
     """Return a Firestore client for the configured or provided project."""
     return firestore.Client(project=project_id)
 
-db = get_firestore_client(project_id=os.environ.get("PROJECT_ID"))
+
+@lru_cache(maxsize=1)
+def get_db() -> firestore.Client:
+    """Return a process-wide Firestore client, built on first use.
+
+    Creating the client lazily (rather than at import) keeps importing this
+    module free of GCP credentials, so tests/CI that never hit Firestore don't
+    need any. ``lru_cache`` makes it an idempotent singleton.
+    """
+    return get_firestore_client(project_id=os.environ.get("PROJECT_ID"))
 
 
 def _saved_decks_collection():
     """Return the Firestore collection used for persisted user decks."""
-    return db.collection("saved_decks")
+    return get_db().collection("saved_decks")
 
 
 def normalize_saved_cards(cards: list[dict]) -> list[dict]:
@@ -133,7 +143,7 @@ def create_api_key(user_id: str, rate_limit: str = "60/minute", prefix_len: int 
             "rate_limit": rate_limit,
         }
         try:
-            db.collection("api_keys").document(prefix).create(doc)
+            get_db().collection("api_keys").document(prefix).create(doc)
             return raw
         except AlreadyExists:
             continue
@@ -144,7 +154,7 @@ def authenticate_api_key(raw_key: str) -> dict | None:
         return None
 
     prefix = raw_key[:8]
-    doc_ref = db.collection("api_keys").document(prefix)
+    doc_ref = get_db().collection("api_keys").document(prefix)
     doc = cast(DocumentSnapshot, doc_ref.get())
     if not doc.exists:
         return None
@@ -178,7 +188,7 @@ def authenticate_api_key(raw_key: str) -> dict | None:
 
 def touch_last_used(api_key_id: str) -> None:
     """Update the last-used timestamp for a key document."""
-    doc_ref = db.collection("api_keys").document(api_key_id)
+    doc_ref = get_db().collection("api_keys").document(api_key_id)
     doc_ref.update({"last_used_at": datetime.now(timezone.utc)})
 
 if __name__ == "__main__":
