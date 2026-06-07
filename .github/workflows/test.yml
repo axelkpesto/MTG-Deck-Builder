@@ -51,4 +51,4 @@ jobs:
         run: pytest --collect-only -q
 
       - name: Run test suite
-        run: pytest -ra --tb=short
+        run: python -c "import os, sys, pytest; rc = pytest.main(['-ra', '--tb=short']); sys.stdout.flush(); sys.stderr.flush(); os._exit(int(rc))"
