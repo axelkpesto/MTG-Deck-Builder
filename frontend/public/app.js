@@ -1326,9 +1326,15 @@
         );
         if (els.importFailed) {
           els.importFailed.hidden = false;
-          els.importFailed.innerHTML =
-            `<strong>Cards not found (${invalidNames.length}):</strong>` +
-            invalidNames.map((n) => `<div>${n}</div>`).join("");
+          els.importFailed.replaceChildren();
+          const header = document.createElement("strong");
+          header.textContent = `Cards not found (${invalidNames.length}):`;
+          els.importFailed.appendChild(header);
+          invalidNames.forEach((n) => {
+            const row = document.createElement("div");
+            row.textContent = n;
+            els.importFailed.appendChild(row);
+          });
         }
       } else {
         setStatus(`Imported ${validCards.length} card(s).`, "success");

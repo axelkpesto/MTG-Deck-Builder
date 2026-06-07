@@ -10,16 +10,15 @@ from typing import Any
 import numpy as np
 import torch
 from dotenv import load_dotenv
-from flask import Flask, request, jsonify, g
+from flask import Flask, Response, request, jsonify, g
+from flask.typing import ResponseReturnValue
 from flask_cors import CORS
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
-from google.api_core.exceptions import GoogleAPICallError, RetryError
-
 from backend.card_data import CardDecoder, SimpleDeck, SimpleDeckAnalyzer
 from backend.config import CONFIG
 from backend.deckgen import DeckGenBundle, DeckGenPaths
-from backend.firestore.firestore_connector import authenticate_api_key, touch_last_used
+from backend.firestore.firestore_connector import authenticate_api_key
 from backend.ml.tagging_model import load_model, predicted_scores_from_probabilities
 from backend.vector_database import VectorDatabase
 
@@ -113,7 +112,7 @@ limiter = Limiter(
 
 auth_enabled = bool(int(os.environ.get("AUTHENTICATE", 1)))
 
-def error(message: str, status: int = 400):
+def error(message: str, status: int = 400) -> tuple[Response, int]:
     """Return a JSON error response with the given message and HTTP status.
 
     Args:
@@ -259,7 +258,7 @@ def set_limit() -> str:
     if hasattr(g, "rate_limit") and g.rate_limit:
         rl = g.rate_limit
         if rl == "unlimited":
-            return DEFAULT_RATE_LIMIT
+            return "1000000 per minute"
         if "/" in rl:
             split = rl.split("/")
             return f"{split[0]} per {split[1]}"
@@ -267,7 +266,7 @@ def set_limit() -> str:
     return DEFAULT_RATE_LIMIT
 
 @app.before_request
-def _start_timer():
+def _start_timer() -> None:
     """Record the request start time for latency logging.
 
     Args:
@@ -279,7 +278,7 @@ def _start_timer():
     g.start_time = time.time()
 
 @app.before_request
-def _authenticate_api_key():
+def _authenticate_api_key() -> ResponseReturnValue | None:
     """Validate the API key on every request that requires authentication.
 
     Args:
@@ -298,9 +297,6 @@ def _authenticate_api_key():
     if not api_key:
         return error("missing API key", 401)
 
-    if api_key == g.get("last_raw"):
-        return None
-
     info = authenticate_api_key(api_key)
     if not info:
         return error("invalid or expired API key", 403)
@@ -308,16 +304,10 @@ def _authenticate_api_key():
     g.api_key_id = info["api_key_id"]
     g.user_id = info["user_id"]
     g.rate_limit = info["rate_limit"]
-    g.last_raw = api_key
-
-    try:
-        touch_last_used(g.api_key_id)
-    except (GoogleAPICallError, RetryError, ValueError, RuntimeError):
-        pass
     return None
 
 @app.after_request
-def _log_request(resp):
+def _log_request(resp: Response) -> Response:
     """Log method, path, status code, and elapsed time for each completed request.
 
     Args:
@@ -334,7 +324,7 @@ def _log_request(resp):
     return resp
 
 @app.errorhandler(404)
-def _not_found(_):
+def _not_found(_: Exception) -> ResponseReturnValue:
     """Handle 404 Not Found errors.
 
     Args:
@@ -346,7 +336,7 @@ def _not_found(_):
     return error("not found", 404)
 
 @app.errorhandler(500)
-def _server_error(e):
+def _server_error(e: Exception) -> ResponseReturnValue:
     """Handle unhandled 500 Internal Server Errors.
 
     Args:
@@ -359,7 +349,7 @@ def _server_error(e):
     return error("internal server error", 500)
 
 @app.route('/', methods=['GET', 'POST'])
-def home():
+def home() -> ResponseReturnValue:
     """Render the server landing page.
 
     Args:
@@ -374,7 +364,7 @@ def home():
     "<p>For a list of examples, visit <a href='/examples'>/examples</a></p>"
 
 @app.route('/help', methods=['GET'])
-def help_route():
+def help_route() -> ResponseReturnValue:
     """Return a JSON description of all available API endpoints.
 
     Args:
@@ -458,7 +448,7 @@ def help_route():
     })
 
 @app.route('/examples', methods=['GET'])
-def examples():
+def examples() -> ResponseReturnValue:
     """Return example request bodies for all API endpoints.
 
     Args:
@@ -533,7 +523,7 @@ def examples():
     })
 
 @app.route('/status', methods=['POST'])
-def health():
+def health() -> ResponseReturnValue:
     """Return the health status of all loaded server components.
 
     Args:
@@ -554,7 +544,7 @@ def health():
 
 @app.route('/get_vector', methods=['POST'])
 @limiter.limit(set_limit)
-def get_vector():
+def get_vector() -> ResponseReturnValue:
     """Return the raw embedding vector for a card by name.
 
     Args:
@@ -583,7 +573,7 @@ def get_vector():
 
 @app.route('/get_vector_description', methods=['POST'])
 @limiter.limit(set_limit)
-def get_vector_description():
+def get_vector_description() -> ResponseReturnValue:
     """Return the human-readable description dict for a card by name.
 
     Args:
@@ -608,7 +598,7 @@ def get_vector_description():
 
 @app.route('/get_vector_descriptions', methods=['POST'])
 @limiter.limit(set_limit)
-def get_vector_descriptions():
+def get_vector_descriptions() -> ResponseReturnValue:
     """Return description dicts for a batch of cards by name.
 
     Args:
@@ -636,7 +626,7 @@ def get_vector_descriptions():
 
 @app.route('/get_random_vector', methods=['POST'])
 @limiter.limit(set_limit)
-def get_random_vector():
+def get_random_vector() -> ResponseReturnValue:
     """Return the id and raw embedding vector for a randomly sampled card.
 
     Args:
@@ -655,7 +645,7 @@ def get_random_vector():
 
 @app.route('/get_random_vector_description', methods=['POST'])
 @limiter.limit(set_limit)
-def get_random_vector_description():
+def get_random_vector_description() -> ResponseReturnValue:
     """Return the description dict for a randomly sampled card.
 
     Args:
@@ -668,7 +658,7 @@ def get_random_vector_description():
 
 @app.route('/get_similar_vectors', methods=['POST'])
 @limiter.limit(set_limit)
-def get_similar_vectors():
+def get_similar_vectors() -> ResponseReturnValue:
     """Return the most similar cards to a given card, ranked by vector similarity.
 
     Args:
@@ -704,7 +694,7 @@ def get_similar_vectors():
 
 @app.route('/get_tags', methods=['POST'])
 @limiter.limit(set_limit)
-def get_tags():
+def get_tags() -> ResponseReturnValue:
     """Return predicted gameplay tags for a card by name.
 
     Args:
@@ -739,7 +729,7 @@ def get_tags():
 
 @app.route('/get_tag_list', methods=['POST'])
 @limiter.limit(set_limit)
-def get_tag_list():
+def get_tag_list() -> ResponseReturnValue:
     """Return predicted gameplay tags for a batch of cards by name.
 
     Args:
@@ -778,7 +768,7 @@ def get_tag_list():
 
 @app.route('/get_tags_from_vector', methods=['POST'])
 @limiter.limit(set_limit)
-def get_tags_from_vector():
+def get_tags_from_vector() -> ResponseReturnValue:
     """Return predicted gameplay tags for a raw embedding vector.
 
     Args:
@@ -807,7 +797,7 @@ def get_tags_from_vector():
 
 @app.route('/generate_deck', methods=['POST'])
 @limiter.limit(set_limit)
-def generate_deck():
+def generate_deck() -> ResponseReturnValue:
     """Generate a Commander deck list for the given commander card.
 
     Args:
@@ -832,11 +822,20 @@ def generate_deck():
     except KeyError:
         return error("id not found", 400)
 
+    card_vec = vd.get(card, None)
+    if card_vec is not None and vd.decoder is not None:
+        card_types = vd.decoder.item_from_vector(card_vec.cpu(), 'types')
+        card_supertypes = vd.decoder.item_from_vector(card_vec.cpu(), 'supertypes')
+        is_legendary = 'legendary' in card_supertypes
+        is_creature = 'creature' in card_types
+        if not is_legendary or not is_creature:
+            return error(f"'{card}' is not a valid commander — must be a legendary creature", 400)
+
     return jsonify(_deckgen.bundle.generate(card))
 
 @app.route('/analyze_deck', methods=['POST'])
 @limiter.limit(set_limit)
-def analyze_deck():
+def analyze_deck() -> ResponseReturnValue:
     """Analyze a submitted deck list and return SimpleDeckAnalyzer metrics.
 
     Args:
@@ -929,7 +928,7 @@ def main() -> None:
     Returns:
         None
     """
-    app.run(host='0.0.0.0', port=int(os.environ.get('DEFAULT_PORT', 8080)))
+    app.run(host='0.0.0.0', port=int(os.environ.get('DEFAULT_PORT', 5000)))
 
 
 if __name__ == '__main__':

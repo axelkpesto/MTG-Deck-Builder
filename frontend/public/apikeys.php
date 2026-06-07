@@ -141,8 +141,48 @@ function apikeys_firestore_patch(string $docPath, array $fields, array $updateFi
         CURLOPT_POSTFIELDS => (string)json_encode(['fields' => $fields], JSON_UNESCAPED_SLASHES),
         CURLOPT_TIMEOUT    => 15,
     ]);
-    curl_exec($ch);
+    $response = curl_exec($ch);
+    $status   = (int)curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
+    $err      = curl_error($ch);
     curl_close($ch);
+
+    if ($response === false) {
+        throw new RuntimeException("Firestore PATCH failed: {$err}");
+    }
+    if ($status < 200 || $status >= 300) {
+        throw new RuntimeException("Firestore PATCH returned HTTP {$status}: {$response}");
+    }
+}
+
+/**
+ * Create a new Firestore document at the given collection path with a chosen ID.
+ * Throws on HTTP failure; the caller distinguishes 409 ALREADY_EXISTS by message.
+ */
+function apikeys_firestore_create(string $collectionPath, string $documentId, array $fields): int
+{
+    $token = apikeys_access_token();
+    $url   = apikeys_firestore_base_url() . $collectionPath . '?documentId=' . rawurlencode($documentId);
+
+    $ch = curl_init($url);
+    curl_setopt_array($ch, [
+        CURLOPT_POST           => true,
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_HTTPHEADER     => [
+            'Authorization: Bearer ' . $token,
+            'Content-Type: application/json',
+        ],
+        CURLOPT_POSTFIELDS => (string)json_encode(['fields' => $fields], JSON_UNESCAPED_SLASHES),
+        CURLOPT_TIMEOUT    => 15,
+    ]);
+    $response = curl_exec($ch);
+    $status   = (int)curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
+    $err      = curl_error($ch);
+    curl_close($ch);
+
+    if ($response === false) {
+        throw new RuntimeException("Firestore CREATE failed: {$err}");
+    }
+    return $status;
 }
 
 function apikeys_firestore_query(string $collectionId, array $where): array
@@ -221,29 +261,40 @@ function apikeys_deactivate_for_user(string $userId): void
 
 function apikeys_register(string $email, string $pepper): string
 {
-    $userId  = apikeys_hmac($email, $pepper);
-
-    $raw     = apikeys_generate_raw();
-    $prefix  = substr($raw, 0, 8);
-    $keyHash = apikeys_hmac($raw, $pepper);
+    $userId = apikeys_hmac($email, $pepper);
 
     apikeys_deactivate_for_user($userId);
 
     $now     = gmdate('Y-m-d\TH:i:s\Z');
     $expires = gmdate('Y-m-d\TH:i:s\Z', strtotime('+365 days'));
 
-    apikeys_firestore_patch(
-        '/api_keys/' . rawurlencode($prefix),
-        [
-            'user_id'      => ['stringValue'  => $userId],
-            'key_hash'     => ['stringValue'  => $keyHash],
-            'is_active'    => ['booleanValue' => true],
-            'created_at'   => ['timestampValue' => $now],
-            'last_used_at' => ['nullValue'    => null],
-            'expires_at'   => ['timestampValue' => $expires],
-            'rate_limit'   => ['stringValue'  => '60/minute'],
-        ],
-    );
+    // Loop until createDocument lands on an unused 8-char prefix. Without this,
+    // a colliding prefix would silently overwrite another user's auth doc.
+    while (true) {
+        $raw     = apikeys_generate_raw();
+        $prefix  = substr($raw, 0, 8);
+        $keyHash = apikeys_hmac($raw, $pepper);
 
-    return $raw;
+        $status = apikeys_firestore_create(
+            '/api_keys',
+            $prefix,
+            [
+                'user_id'      => ['stringValue'    => $userId],
+                'key_hash'     => ['stringValue'    => $keyHash],
+                'is_active'    => ['booleanValue'   => true],
+                'created_at'   => ['timestampValue' => $now],
+                'last_used_at' => ['nullValue'      => null],
+                'expires_at'   => ['timestampValue' => $expires],
+                'rate_limit'   => ['stringValue'    => '60/minute'],
+            ],
+        );
+
+        if ($status >= 200 && $status < 300) {
+            return $raw;
+        }
+        if ($status !== 409) {
+            throw new RuntimeException("Firestore CREATE returned HTTP {$status}");
+        }
+        // 409 ALREADY_EXISTS: regenerate the prefix and retry.
+    }
 }
