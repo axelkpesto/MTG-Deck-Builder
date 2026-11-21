@@ -21,7 +21,7 @@ $method = strtoupper((string)($input['method'] ?? 'GET'));
 $query = isset($input['query']) && is_array($input['query']) ? $input['query'] : [];
 $body = isset($input['body']) && is_array($input['body']) ? $input['body'] : null;
 
-$allowedPrefixes = [
+$allowedPaths = [
     '/status',
     '/get_vector',
     '/get_vector_description',
@@ -36,15 +36,7 @@ $allowedPrefixes = [
     '/analyze_deck',
 ];
 
-$allowed = false;
-foreach ($allowedPrefixes as $prefix) {
-    if (str_starts_with($path, $prefix)) {
-        $allowed = true;
-        break;
-    }
-}
-
-if (!$allowed) {
+if (!in_array($path, $allowedPaths, true)) {
     app_json(['error' => 'Endpoint not allowed'], 403);
 }
 

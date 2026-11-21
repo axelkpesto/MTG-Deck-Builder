@@ -30,7 +30,6 @@ class CardDecoder:
             "types": self.card_types,
             "supertypes": self.card_supertypes,
             "subtypes": self.all_subtypes,
-            "mana": self.color_identities,
             "colors": self.color_identities,
             "rarity": self.rarities
         }
@@ -184,7 +183,7 @@ class CardDecoder:
         mana = torch.clamp(mana, 0, 16)
 
         rarity = torch.round(logits[..., s_rarity])
-        rarity = torch.clamp(rarity, 1, len(self.rarities) + 1)
+        rarity = torch.clamp(rarity, 1, len(self.rarities))
 
         embed = F.normalize(logits[..., s_embed], dim=-1)
 

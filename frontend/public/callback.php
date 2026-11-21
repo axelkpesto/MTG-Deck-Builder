@@ -37,14 +37,11 @@ $tokenCode = (int)curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
 $tokenCurlErr = curl_error($ch);
 curl_close($ch);
 
-$tokenDetails = $tokenRaw;
-if ($tokenDetails === false) {
-    $tokenDetails = ['curl_error' => $tokenCurlErr, 'http_code' => $tokenCode];
-}
-
 $tokenJson = json_decode((string)$tokenRaw, true);
 if ($tokenCode < 200 || $tokenCode >= 300 || !is_array($tokenJson) || empty($tokenJson['access_token'])) {
-    error_log('Token exchange failed: ' . print_r($tokenDetails, true));
+    // Log only metadata — never raw response, which may contain a valid token.
+    $errorCode = is_array($tokenJson) ? (string)($tokenJson['error'] ?? 'unknown') : 'non_json';
+    error_log("Token exchange failed: http={$tokenCode} error={$errorCode} curl_error={$tokenCurlErr}");
     app_json(['error' => 'Token exchange failed'], 401);
 }
 

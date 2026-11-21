@@ -140,7 +140,7 @@ class SimpleDeck:
         if len(self.cards) >= 99:
             self.cards = self.cards[:99]
             return
-        basics = SimpleDeck.basic_lands_from_colors(commander_colors)
+        basics = SimpleDeck.basic_lands_from_colors(commander_colors) or ["Wastes"]
         need = 99 - len(self.cards)
         self.cards += (basics * ((need // len(basics)) + 1))[:need]
 

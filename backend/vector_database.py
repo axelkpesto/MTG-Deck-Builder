@@ -31,10 +31,19 @@ class VectorStore:
     def __eq__(self, item) -> bool:
         if not isinstance(item, VectorStore):
             return False
-        return self.vector_data.items() == item.vector_data.items()
+        if self.vector_data.keys() != item.vector_data.keys():
+            return False
+        for k, v in self.vector_data.items():
+            value = item.vector_data[k]
+            if isinstance(v, torch.Tensor) and isinstance(value, torch.Tensor):
+                if v.shape != value.shape or not torch.equal(v.cpu(), value.cpu()):
+                    return False
+            elif v != value:
+                return False
+        return True
 
     def __hash__(self) -> int:
-        return hash(frozenset(self.vector_data.items()))
+        return hash(frozenset(self.vector_data.keys()))
 
     def __contains__(self, key) -> bool:
         return key in self.vector_data
@@ -135,15 +144,21 @@ class VectorStore:
         self.vector_data[v_id] = vector_tensor
         self._mark_cache(dirty=True)
 
-    def get(self, v_id: str, default: Any) -> torch.Tensor:
-        """Get vector by id or return `default` if missing."""
+    _NO_DEFAULT = object()
+
+    def get(self, v_id: str, default: Any = _NO_DEFAULT) -> torch.Tensor:
+        """Get vector by id or return `default` if missing.
+
+        If `default` is omitted, a missing key raises `KeyError`. Explicitly
+        passing `default=None` returns `None`, matching `dict.get` semantics.
+        """
         if v_id in self.vector_data:
             return self.vector_data[v_id]
-        if default is not None:
-            return default
-        raise KeyError(f"KeyError: {v_id}")
+        if default is self._NO_DEFAULT:
+            raise KeyError(f"KeyError: {v_id}")
+        return default
 
-    def get_list(self, v_ids: List[str], default: Any) -> List[torch.Tensor]:
+    def get_list(self, v_ids: List[str], default: Any = _NO_DEFAULT) -> List[torch.Tensor]:
         """Get vectors for a list of ids with fallback default."""
         return [self.get(v_id, default) for v_id in v_ids]
 
@@ -359,11 +374,15 @@ class VectorDatabase:
         """Return decoder instance."""
         return self.decoder
 
-    def get(self, v_id: str, default: Any = None) -> torch.Tensor:
-        """Get vector by id or fallback default."""
+    def get(self, v_id: str, default: Any = VectorStore._NO_DEFAULT) -> torch.Tensor:
+        """Get vector by id or fallback default.
+
+        If `default` is omitted, missing ids raise `KeyError`. Explicit
+        `default=None` returns `None`.
+        """
         return self.vector_store.get(v_id, default)
 
-    def get_list(self, v_ids: List[str], default: Any = None) -> List[torch.Tensor]:
+    def get_list(self, v_ids: List[str], default: Any = VectorStore._NO_DEFAULT) -> List[torch.Tensor]:
         """Get vectors for a list of ids."""
         return self.vector_store.get_list(v_ids, default)
 

@@ -26,14 +26,14 @@ class Card:
 
     def __eq__(self, value: object) -> bool:
         if isinstance(value, Card):
-            return self.card_name == value.card_name
+            return self.card_id == value.card_id
         return False
 
     def __str__(self) -> str:
         return "\n".join(f"{k}: {v}" for k, v in self.get_attributes().items())
 
     def __hash__(self) -> int:
-        return hash(self.rank)
+        return hash(self.card_id)
 
     def __len__(self) -> int:
         return 1
