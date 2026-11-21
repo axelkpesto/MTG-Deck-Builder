@@ -3,10 +3,7 @@
 The pepper is set to a deterministic test value in conftest (which pytest imports
 before this module), so importing `firebase_auth` at module load is safe.
 """
-import hmac
-import hashlib
-import os
-
+from backend.firestore import firebase_auth
 from backend.firestore.firebase_auth import generate_api_key, validate_api_key
 
 
@@ -52,15 +49,13 @@ class TestGenerateApiKey:
         b, _, _ = generate_api_key()
         assert a != b
 
-    def test_hash_matches_recomputed_hmac(self):
-        """The digest equals HMAC(pepper, raw) recomputed independently."""
+    def test_hash_matches_known_answer(self, monkeypatch):
+        """With a fixed pepper and token, the digest matches a precomputed HMAC-SHA256 vector."""
+        monkeypatch.setattr(firebase_auth, "PEPPER_STR", "kat-pepper")
+        monkeypatch.setattr(firebase_auth.secrets, "token_urlsafe", lambda _n: "known-answer-token")
         raw, _, digest = generate_api_key()
-        expected = hmac.new(
-            os.environ["API_KEY_PEPPER"].encode("utf-8"),
-            raw.encode("utf-8"),
-            hashlib.sha256,
-        ).hexdigest()
-        assert digest == expected
+        assert raw == "mtg_known-answer-token"
+        assert digest == "5a4e03cb01165e2c819b8ac74b918daa18a126b74168664c953db73ced89ec51"
 
 
 # ---------------------------------------------------------------------------
